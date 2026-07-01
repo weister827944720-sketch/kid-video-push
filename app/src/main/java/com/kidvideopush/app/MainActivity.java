@@ -191,13 +191,19 @@ public class MainActivity extends Activity {
     }
 
     private void injectCleaner() {
-        webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null);
-        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 500);
-        webView.postDelayed(() -> overlay.setVisibility(View.GONE), 1200);
-        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 1500);
-        webView.postDelayed(() -> overlay.setVisibility(View.GONE), 1800);
-        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 3000);
+        runCleanerAndMaybeHideOverlay();
+        webView.postDelayed(this::runCleanerAndMaybeHideOverlay, 400);
+        webView.postDelayed(this::runCleanerAndMaybeHideOverlay, 900);
+        webView.postDelayed(this::runCleanerAndMaybeHideOverlay, 1500);
+        webView.postDelayed(this::runCleanerAndMaybeHideOverlay, 2300);
+        webView.postDelayed(this::runCleanerAndMaybeHideOverlay, 3200);
         webView.postDelayed(this::captureDomDebug, 2500);
+    }
+
+    private void runCleanerAndMaybeHideOverlay() {
+        webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, value -> {
+            if ("true".equals(value)) overlay.setVisibility(View.GONE);
+        });
     }
 
     private void captureDomDebug() {
@@ -270,7 +276,7 @@ public class MainActivity extends Activity {
             "      html, body, #root, .container, .video-container { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; }\n" +
             "      .video-container, .horizontal-video { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
             "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
-            "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .footer, .bottom-btn-con-new, .right-con,\n" +
+            "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .bottom-btn-con-new, .right-con,\n" +
             "      .end-page-info, .end-page-info__container, .end-page-info__waterfall, .end-page-info-button,\n" +
             "      .arco-masking, .arco-popup, .commentBoard_8924a, .commentBoardTopBanner_8924a, .commentList_8924a,\n" +
             "      .video-card__like, .video-card__like__count, .video-card__cover__wrapper, .progress_small-wrapper,\n" +
@@ -294,14 +300,18 @@ public class MainActivity extends Activity {
             "    ['root'].forEach(function(id){ const el=document.getElementById(id); if(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); } });\n" +
             "    document.querySelectorAll('.container,.video-container,.horizontal-video').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
             "    const video=document.querySelector('video');\n" +
+            "    let playing=false;\n" +
             "    if(video){\n" +
             "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
             "      video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important';\n" +
             "      const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
+            "      playing=!video.paused && video.readyState >= 2;\n" +
             "    }\n" +
+            "    return playing;\n" +
             "  }\n" +
-            "  hideNoise();\n" +
+            "  const result=hideNoise();\n" +
             "  setInterval(hideNoise, 700);\n" +
+            "  return result;\n" +
             "})();";
 
     private static final String DOM_DEBUG_JS =
