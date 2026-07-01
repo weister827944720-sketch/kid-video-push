@@ -29,6 +29,7 @@ import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -85,16 +86,20 @@ public class MainActivity extends Activity {
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+        webView.getSettings().setLoadWithOverviewMode(false);
+        webView.getSettings().setUseWideViewPort(false);
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String scheme = request.getUrl().getScheme();
-                return !"http".equals(scheme) && !"https".equals(scheme);
+                String url = request.getUrl().toString();
+                if (!"http".equals(scheme) && !"https".equals(scheme)) return true;
+                return url.contains("/download") || url.contains("open.douyin") || url.contains("snssdk");
             }
 
             @Override
             public void onPageFinished(WebView view, String loadedUrl) {
-                view.evaluateJavascript(HIDE_DISTRACTIONS_JS, null);
+                injectCleaner();
             }
         });
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
@@ -137,6 +142,7 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             try {
                 List<VideoItem> result = fetchVideos(SERVER_URL);
+                Collections.sort(result, (a, b) -> b.createdAt.compareTo(a.createdAt));
                 runOnUiThread(() -> {
                     videos.clear();
                     videos.addAll(result);
@@ -178,6 +184,13 @@ public class MainActivity extends Activity {
         } else {
             showTemporaryOverlay("已经是第一个");
         }
+    }
+
+    private void injectCleaner() {
+        webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 500);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 1500);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 3000);
     }
 
     private void showOverlay(String text) {
@@ -224,16 +237,41 @@ public class MainActivity extends Activity {
 
     private static final String HIDE_DISTRACTIONS_JS =
             "(function() {\n" +
-            "  const style = document.createElement('style');\n" +
-            "  style.innerHTML = `\n" +
-            "    [class*=\"comment\"], [class*=\"like\"], [class*=\"favorite\"], [class*=\"share\"],\n" +
-            "    [class*=\"open\"], [class*=\"download\"], [class*=\"login\"], button, header, footer {\n" +
-            "      display: none !important; visibility: hidden !important;\n" +
+            "  function hideNoise(){\n" +
+            "    const css = `\n" +
+            "      html, body { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; }\n" +
+            "      video { width:100vw!important; height:100vh!important; object-fit:cover!important; position:fixed!important; inset:0!important; z-index:1!important; background:#000!important; }\n" +
+            "      header, footer, nav, aside, button, [role=button], [class*=\\\"comment\\\"], [class*=\\\"Comment\\\"],\n" +
+            "      [class*=\\\"like\\\"], [class*=\\\"Like\\\"], [class*=\\\"favorite\\\"], [class*=\\\"Favorite\\\"],\n" +
+            "      [class*=\\\"share\\\"], [class*=\\\"Share\\\"], [class*=\\\"open\\\"], [class*=\\\"Open\\\"],\n" +
+            "      [class*=\\\"download\\\"], [class*=\\\"Download\\\"], [class*=\\\"login\\\"], [class*=\\\"Login\\\"],\n" +
+            "      [class*=\\\"avatar\\\"], [class*=\\\"Avatar\\\"], [class*=\\\"follow\\\"], [class*=\\\"Follow\\\"],\n" +
+            "      [href*=\\\"download\\\"], [href*=\\\"snssdk\\\"], [href*=\\\"open\\\"], [data-e2e*=\\\"like\\\"], [data-e2e*=\\\"comment\\\"] {\n" +
+            "        display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; width:0!important; height:0!important;\n" +
+            "      }\n" +
+            "    `;\n" +
+            "    let style = document.getElementById('kid-clean-style');\n" +
+            "    if(!style){ style = document.createElement('style'); style.id='kid-clean-style'; document.head.appendChild(style); }\n" +
+            "    style.textContent = css;\n" +
+            "    document.querySelectorAll('a,button,div,span').forEach(function(el){\n" +
+            "      const text=(el.innerText||el.textContent||'').trim();\n" +
+            "      const cls=(el.className||'').toString();\n" +
+            "      const href=(el.getAttribute&&el.getAttribute('href'))||'';\n" +
+            "      if(/打开|App|APP|抖音|关注|点赞|评论|收藏|分享|登录|下载/.test(text) || /open|download|login|follow|like|comment|favorite|share/i.test(cls+href)){\n" +
+            "        el.style.setProperty('display','none','important');\n" +
+            "        el.style.setProperty('visibility','hidden','important');\n" +
+            "        el.style.setProperty('pointer-events','none','important');\n" +
+            "      }\n" +
+            "    });\n" +
+            "    const video=document.querySelector('video');\n" +
+            "    if(video){\n" +
+            "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
+            "      video.style.cssText='width:100vw!important;height:100vh!important;object-fit:cover!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important';\n" +
+            "      const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
             "    }\n" +
-            "    video { width: 100vw !important; height: 100vh !important; object-fit: cover !important; }\n" +
-            "    body { margin: 0 !important; overflow: hidden !important; background: #000 !important; }\n" +
-            "  `;\n" +
-            "  document.head.appendChild(style);\n" +
+            "  }\n" +
+            "  hideNoise();\n" +
+            "  setInterval(hideNoise, 700);\n" +
             "})();";
 
     private static void pushLink(String serverUrl, String link) throws Exception {
@@ -267,7 +305,9 @@ public class MainActivity extends Activity {
         for (int i = 0; i < array.length(); i++) {
             JSONObject obj = array.getJSONObject(i);
             String shareUrl = obj.optString("shareUrl");
-            if (extractDouyinUrl(shareUrl) != null) items.add(new VideoItem(shareUrl));
+            if (extractDouyinUrl(shareUrl) != null) {
+                items.add(new VideoItem(shareUrl, obj.optString("createdAt")));
+            }
         }
         return items;
     }
@@ -287,8 +327,10 @@ public class MainActivity extends Activity {
 
     private static class VideoItem {
         final String shareUrl;
-        VideoItem(String shareUrl) {
+        final String createdAt;
+        VideoItem(String shareUrl, String createdAt) {
             this.shareUrl = shareUrl;
+            this.createdAt = createdAt == null ? "" : createdAt;
         }
     }
 }
