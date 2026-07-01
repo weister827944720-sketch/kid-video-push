@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private WebView webView;
     private TextView overlay;
+    private View gestureLayer;
     private GestureDetector gestureDetector;
     private int currentIndex = 0;
     private String lastDebugUrl = "";
@@ -84,6 +85,9 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.BLACK);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
@@ -125,14 +129,13 @@ public class MainActivity extends Activity {
             }
         });
 
-        root.setOnTouchListener((v, event) -> {
+        gestureLayer = new View(this);
+        gestureLayer.setBackgroundColor(Color.TRANSPARENT);
+        gestureLayer.setOnTouchListener((v, event) -> {
             gestureDetector.onTouchEvent(event);
             return true;
         });
-        webView.setOnTouchListener((v, event) -> {
-            gestureDetector.onTouchEvent(event);
-            return false;
-        });
+        root.addView(gestureLayer, new FrameLayout.LayoutParams(-1, -1));
 
         setContentView(root);
         showOverlay("正在加载推荐视频...");
@@ -217,11 +220,13 @@ public class MainActivity extends Activity {
     private void showOverlay(String text) {
         overlay.setText(text);
         overlay.setVisibility(View.VISIBLE);
+        overlay.bringToFront();
     }
 
     private void showTemporaryOverlay(String text) {
         overlay.setText(text);
         overlay.setVisibility(View.VISIBLE);
+        overlay.bringToFront();
         overlay.postDelayed(() -> overlay.setVisibility(View.GONE), 800);
     }
 
@@ -262,7 +267,7 @@ public class MainActivity extends Activity {
             "    const css = `\n" +
             "      html, body, #root, .container, .video-container { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; }\n" +
             "      .video-container, .horizontal-video { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
-            "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:cover!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
+            "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
             "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .footer, .bottom-btn-con-new, .right-con,\n" +
             "      .end-page-info, .end-page-info__container, .end-page-info__waterfall, .end-page-info-button,\n" +
             "      .arco-masking, .arco-popup, .commentBoard_8924a, .commentBoardTopBanner_8924a, .commentList_8924a,\n" +
@@ -289,7 +294,7 @@ public class MainActivity extends Activity {
             "    const video=document.querySelector('video');\n" +
             "    if(video){\n" +
             "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
-            "      video.style.cssText='width:100vw!important;height:100vh!important;object-fit:cover!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important';\n" +
+            "      video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important';\n" +
             "      const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
             "    }\n" +
             "  }\n" +
