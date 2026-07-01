@@ -5,21 +5,23 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.view.GestureDetector;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.LinearLayout;
-import android.widget.ProgressBar;
-import android.widget.ScrollView;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -30,153 +32,38 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
 
-    private static final String DEFAULT_SERVER = "http://n.dujiaoxian.online:35039";
+    private static final String SERVER_URL = "http://n.dujiaoxian.online:35039";
+    private static final int SWIPE_THRESHOLD = 120;
+    private static final int SWIPE_VELOCITY_THRESHOLD = 120;
 
-    private LinearLayout root;
-    private EditText serverInput;
-    private TextView statusText;
-    private LinearLayout listLayout;
-    private ProgressBar progress;
-    private String sharedText;
+    private final List<VideoItem> videos = new ArrayList<>();
+    private FrameLayout root;
+    private WebView webView;
+    private TextView overlay;
+    private GestureDetector gestureDetector;
+    private int currentIndex = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
         if (Intent.ACTION_SEND.equals(getIntent().getAction())) {
-            sharedText = getIntent().getStringExtra(Intent.EXTRA_TEXT);
+            String text = getIntent().getStringExtra(Intent.EXTRA_TEXT);
+            showPushMode(text == null ? "" : text);
+        } else {
+            showPlayerMode();
         }
-        showHome();
-    }
-
-    private void showHome() {
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(32, 32, 32, 32);
-
-        TextView title = new TextView(this);
-        title.setText("孩子视频推送");
-        title.setTextSize(24);
-        title.setTextColor(Color.BLACK);
-        root.addView(title);
-
-        serverInput = new EditText(this);
-        serverInput.setText(DEFAULT_SERVER);
-        serverInput.setHint("服务器地址");
-        serverInput.setSingleLine(true);
-        root.addView(serverInput);
-
-        statusText = new TextView(this);
-        if (sharedText != null && !sharedText.isEmpty()) {
-            statusText.setText("收到分享内容，准备推送");
-        }
-        statusText.setTextColor(Color.DKGRAY);
-        root.addView(statusText);
-
-        progress = new ProgressBar(this);
-        progress.setVisibility(View.GONE);
-        root.addView(progress);
-
-        if (sharedText != null && !sharedText.isEmpty()) {
-            TextView sharedLabel = new TextView(this);
-            sharedLabel.setText("分享内容：" + (sharedText.length() > 120 ? sharedText.substring(0, 120) : sharedText));
-            root.addView(sharedLabel);
-
-            Button pushBtn = new Button(this);
-            pushBtn.setText("推送给平板");
-            pushBtn.setOnClickListener(v -> pushSharedLink());
-            root.addView(pushBtn);
-        }
-
-        Button refreshBtn = new Button(this);
-        refreshBtn.setText("刷新孩子播放列表");
-        refreshBtn.setOnClickListener(v -> refreshVideos());
-        root.addView(refreshBtn);
-
-        listLayout = new LinearLayout(this);
-        listLayout.setOrientation(LinearLayout.VERTICAL);
-        ScrollView scrollView = new ScrollView(this);
-        scrollView.addView(listLayout);
-        root.addView(scrollView, new LinearLayout.LayoutParams(-1, 0, 1f));
-
-        setContentView(root);
-    }
-
-    private void pushSharedLink() {
-        if (sharedText == null || sharedText.isEmpty()) return;
-        new Thread(() -> {
-            runOnUiThread(() -> setLoading(true, "正在推送"));
-            String serverUrl = serverInput.getText().toString().trim();
-            String result;
-            try {
-                pushLink(serverUrl, sharedText);
-                result = "已推送到服务器";
-            } catch (Exception e) {
-                result = "推送失败：" + e.getMessage();
-            }
-            final String r = result;
-            runOnUiThread(() -> setLoading(false, r));
-        }).start();
-    }
-
-    private void refreshVideos() {
-        new Thread(() -> {
-            runOnUiThread(() -> setLoading(true, "正在刷新"));
-            String serverUrl = serverInput.getText().toString().trim();
-            List<VideoItem> videos = new ArrayList<>();
-            String error = null;
-            try {
-                videos = fetchVideos(serverUrl);
-            } catch (Exception e) {
-                error = e.getMessage();
-            }
-            final List<VideoItem> v = videos;
-            final String e = error;
-            runOnUiThread(() -> {
-                listLayout.removeAllViews();
-                if (e != null) {
-                    setLoading(false, "刷新失败：" + e);
-                } else {
-                    for (VideoItem item : v) {
-                        addVideoRow(item);
-                    }
-                    setLoading(false, "已加载 " + v.size() + " 条");
-                }
-            });
-        }).start();
-    }
-
-    private void addVideoRow(VideoItem item) {
-        String display = (item.title.isEmpty() ? "抖音分享链接" : item.title) + "\n"
-                + item.shareUrl + "\n" + item.createdAt;
-        TextView row = new TextView(this);
-        row.setText(display);
-        row.setTextSize(15);
-        row.setTextColor(Color.BLACK);
-        row.setBackgroundColor(Color.rgb(242, 242, 242));
-        row.setPadding(18, 18, 18, 18);
-        row.setOnClickListener(v -> showWebPlayer(item.shareUrl));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, 10, 0, 10);
-        listLayout.addView(row, params);
-    }
-
-    private void setLoading(boolean loading, String status) {
-        progress.setVisibility(loading ? View.VISIBLE : View.GONE);
-        statusText.setText(status);
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private void showWebPlayer(String url) {
-        LinearLayout frame = new LinearLayout(this);
-        frame.setOrientation(LinearLayout.VERTICAL);
-        frame.setBackgroundColor(Color.BLACK);
+    private void showPlayerMode() {
+        root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
 
-        Button back = new Button(this);
-        back.setText("返回");
-        back.setGravity(Gravity.START);
-        back.setOnClickListener(v -> showHome());
-
-        WebView webView = new WebView(this);
+        webView = new WebView(this);
+        webView.setBackgroundColor(Color.BLACK);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
@@ -192,11 +79,129 @@ public class MainActivity extends Activity {
                 view.evaluateJavascript(HIDE_DISTRACTIONS_JS, null);
             }
         });
-        webView.loadUrl(url);
+        root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
 
-        frame.addView(back, new LinearLayout.LayoutParams(-1, -2));
-        frame.addView(webView, new LinearLayout.LayoutParams(-1, -1, 1f));
+        overlay = new TextView(this);
+        overlay.setTextColor(Color.WHITE);
+        overlay.setTextSize(16);
+        overlay.setGravity(Gravity.CENTER);
+        overlay.setBackgroundColor(0x66000000);
+        root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
+
+        gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                if (e1 == null || e2 == null || videos.isEmpty()) return false;
+                float diffY = e2.getY() - e1.getY();
+                if (Math.abs(diffY) > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
+                    if (diffY < 0) {
+                        playNext();
+                    } else {
+                        playPrevious();
+                    }
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        root.setOnTouchListener((v, event) -> {
+            gestureDetector.onTouchEvent(event);
+            return true;
+        });
+        webView.setOnTouchListener((v, event) -> {
+            gestureDetector.onTouchEvent(event);
+            return false;
+        });
+
+        setContentView(root);
+        showOverlay("正在加载推荐视频...");
+        loadVideos();
+    }
+
+    private void loadVideos() {
+        new Thread(() -> {
+            try {
+                List<VideoItem> result = fetchVideos(SERVER_URL);
+                runOnUiThread(() -> {
+                    videos.clear();
+                    videos.addAll(result);
+                    if (videos.isEmpty()) {
+                        showOverlay("还没有推送视频\n从家长手机抖音分享视频到本 App");
+                    } else {
+                        currentIndex = 0;
+                        playCurrent();
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> showOverlay("加载失败\n" + e.getMessage()));
+            }
+        }).start();
+    }
+
+    private void playCurrent() {
+        if (videos.isEmpty()) return;
+        if (currentIndex < 0) currentIndex = 0;
+        if (currentIndex >= videos.size()) currentIndex = videos.size() - 1;
+        VideoItem item = videos.get(currentIndex);
+        overlay.setVisibility(View.GONE);
+        webView.loadUrl(item.shareUrl);
+    }
+
+    private void playNext() {
+        if (currentIndex < videos.size() - 1) {
+            currentIndex++;
+            playCurrent();
+        } else {
+            showTemporaryOverlay("已经是最后一个");
+        }
+    }
+
+    private void playPrevious() {
+        if (currentIndex > 0) {
+            currentIndex--;
+            playCurrent();
+        } else {
+            showTemporaryOverlay("已经是第一个");
+        }
+    }
+
+    private void showOverlay(String text) {
+        overlay.setText(text);
+        overlay.setVisibility(View.VISIBLE);
+    }
+
+    private void showTemporaryOverlay(String text) {
+        overlay.setText(text);
+        overlay.setVisibility(View.VISIBLE);
+        overlay.postDelayed(() -> overlay.setVisibility(View.GONE), 800);
+    }
+
+    private void showPushMode(String sharedText) {
+        FrameLayout frame = new FrameLayout(this);
+        frame.setBackgroundColor(Color.BLACK);
+        TextView text = new TextView(this);
+        text.setTextColor(Color.WHITE);
+        text.setTextSize(18);
+        text.setGravity(Gravity.CENTER);
+        text.setText("正在推送给平板...");
+        frame.addView(text, new FrameLayout.LayoutParams(-1, -1));
         setContentView(frame);
+
+        new Thread(() -> {
+            String result;
+            try {
+                pushLink(SERVER_URL, sharedText);
+                result = "已推送\n平板打开 App 后会自动出现";
+            } catch (Exception e) {
+                result = "推送失败\n" + e.getMessage();
+            }
+            String finalResult = result;
+            runOnUiThread(() -> {
+                text.setText(finalResult);
+                text.postDelayed(this::finish, 1800);
+            });
+        }).start();
     }
 
     private static final String HIDE_DISTRACTIONS_JS =
@@ -205,10 +210,9 @@ public class MainActivity extends Activity {
             "  style.innerHTML = `\n" +
             "    [class*=\"comment\"], [class*=\"like\"], [class*=\"favorite\"], [class*=\"share\"],\n" +
             "    [class*=\"open\"], [class*=\"download\"], [class*=\"login\"], button, header, footer {\n" +
-            "      display: none !important;\n" +
-            "      visibility: hidden !important;\n" +
+            "      display: none !important; visibility: hidden !important;\n" +
             "    }\n" +
-            "    video { width: 100vw !important; height: 100vh !important; object-fit: contain !important; }\n" +
+            "    video { width: 100vw !important; height: 100vh !important; object-fit: cover !important; }\n" +
             "    body { margin: 0 !important; overflow: hidden !important; background: #000 !important; }\n" +
             "  `;\n" +
             "  document.head.appendChild(style);\n" +
@@ -229,9 +233,7 @@ public class MainActivity extends Activity {
             writer.write(body.toString());
         }
         int code = conn.getResponseCode();
-        if (code < 200 || code > 299) {
-            throw new Exception("HTTP " + code);
-        }
+        if (code < 200 || code > 299) throw new Exception("HTTP " + code);
     }
 
     private static List<VideoItem> fetchVideos(String serverUrl) throws Exception {
@@ -239,47 +241,29 @@ public class MainActivity extends Activity {
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
         StringBuilder sb = new StringBuilder();
-        try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"))) {
             String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line);
-            }
+            while ((line = reader.readLine()) != null) sb.append(line);
         }
         JSONArray array = new JSONArray(sb.toString());
         List<VideoItem> items = new ArrayList<>(array.length());
         for (int i = 0; i < array.length(); i++) {
             JSONObject obj = array.getJSONObject(i);
-            items.add(new VideoItem(
-                    obj.optString("id"),
-                    obj.optString("shareUrl"),
-                    obj.optString("title"),
-                    obj.optString("createdAt")
-            ));
+            items.add(new VideoItem(obj.optString("shareUrl")));
         }
         return items;
     }
 
     private static String extractFirstUrl(String text) {
         Matcher m = Pattern.compile("https?://\\S+").matcher(text);
-        if (m.find()) {
-            String url = m.group();
-            return url.replaceAll("[，,。.\\s]+$", "");
-        }
+        if (m.find()) return m.group().replaceAll("[，,。.\\s]+$", "");
         return null;
     }
 
     private static class VideoItem {
-        final String id;
         final String shareUrl;
-        final String title;
-        final String createdAt;
-
-        VideoItem(String id, String shareUrl, String title, String createdAt) {
-            this.id = id;
+        VideoItem(String shareUrl) {
             this.shareUrl = shareUrl;
-            this.title = title;
-            this.createdAt = createdAt;
         }
     }
 }
