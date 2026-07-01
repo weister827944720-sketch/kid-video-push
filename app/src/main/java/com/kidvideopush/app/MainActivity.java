@@ -191,19 +191,13 @@ public class MainActivity extends Activity {
     }
 
     private void injectCleaner() {
-        runCleanerAndMaybeHideOverlay();
-        webView.postDelayed(this::runCleanerAndMaybeHideOverlay, 400);
-        webView.postDelayed(this::runCleanerAndMaybeHideOverlay, 900);
-        webView.postDelayed(this::runCleanerAndMaybeHideOverlay, 1500);
-        webView.postDelayed(this::runCleanerAndMaybeHideOverlay, 2300);
-        webView.postDelayed(this::runCleanerAndMaybeHideOverlay, 3200);
+        webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 250);
+        webView.postDelayed(() -> overlay.setVisibility(View.GONE), 700);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 900);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 1500);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 2500);
         webView.postDelayed(this::captureDomDebug, 2500);
-    }
-
-    private void runCleanerAndMaybeHideOverlay() {
-        webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, value -> {
-            if ("true".equals(value)) overlay.setVisibility(View.GONE);
-        });
     }
 
     private void captureDomDebug() {
@@ -281,7 +275,7 @@ public class MainActivity extends Activity {
             "      .end-page-info, .end-page-info__container, .end-page-info__waterfall, .end-page-info-button,\n" +
             "      .arco-masking, .arco-popup, .commentBoard_8924a, .commentBoardTopBanner_8924a, .commentList_8924a,\n" +
             "      .video-card__like, .video-card__like__count, .video-card__cover__wrapper, .progress_small-wrapper,\n" +
-            "      [class*=\\\"play\\\"], [class*=\\\"Play\\\"], [class*=\\\"pause\\\"], [class*=\\\"Pause\\\"],\n" +
+            "      [class*=\\\"play\\\"], [class*=\\\"Play\\\"], [class*=\\\"pause\\\"], [class*=\\\"Pause\\\"], [class*=\\\"player-icon\\\"],\n" +
             "      [href*=\\\"download\\\"], [href*=\\\"snssdk\\\"], [href*=\\\"open\\\"], [data-e2e*=\\\"like\\\"], [data-e2e*=\\\"comment\\\"] {\n" +
             "        display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; width:0!important; height:0!important;\n" +
             "      }\n" +
@@ -302,20 +296,16 @@ public class MainActivity extends Activity {
             "    });\n" +
             "    ['root'].forEach(function(id){ const el=document.getElementById(id); if(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); } });\n" +
             "    document.querySelectorAll('.container,.video-container,.horizontal-video').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
-            "    document.querySelectorAll('img.poster,.poster,[class*=\\\"poster\\\"],[class*=\\\"play\\\"],[class*=\\\"Play\\\"]').forEach(function(el){ el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('opacity','0','important'); });\n" +
+            "    document.querySelectorAll('img.poster,.poster,[class*=\\\"poster\\\"],[class*=\\\"play\\\"],[class*=\\\"Play\\\"],[class*=\\\"pause\\\"],[class*=\\\"Pause\\\"],svg,canvas').forEach(function(el){ if(el.tagName==='VIDEO') return; el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('opacity','0','important'); });\n" +
             "    const video=document.querySelector('video');\n" +
-            "    let playing=false;\n" +
             "    if(video){\n" +
             "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
             "      video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important';\n" +
             "      const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
-            "      playing=!video.paused && video.readyState >= 2;\n" +
             "    }\n" +
-            "    return playing;\n" +
             "  }\n" +
-            "  const result=hideNoise();\n" +
+            "  hideNoise();\n" +
             "  setInterval(hideNoise, 700);\n" +
-            "  return result;\n" +
             "})();";
 
     private static final String DOM_DEBUG_JS =
