@@ -276,10 +276,12 @@ public class MainActivity extends Activity {
             "      html, body, #root, .container, .video-container { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; }\n" +
             "      .video-container, .horizontal-video { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
             "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
-            "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .bottom-btn-con-new, .right-con,\n" +
+            "      .footer { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:0!important; z-index:3!important; pointer-events:none!important; color:#fff!important; }\n" +
+            "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .poster, .video-msg-container, .bottom-btn-con-new, .right-con,\n" +
             "      .end-page-info, .end-page-info__container, .end-page-info__waterfall, .end-page-info-button,\n" +
             "      .arco-masking, .arco-popup, .commentBoard_8924a, .commentBoardTopBanner_8924a, .commentList_8924a,\n" +
             "      .video-card__like, .video-card__like__count, .video-card__cover__wrapper, .progress_small-wrapper,\n" +
+            "      [class*=\\\"play\\\"], [class*=\\\"Play\\\"], [class*=\\\"pause\\\"], [class*=\\\"Pause\\\"],\n" +
             "      [href*=\\\"download\\\"], [href*=\\\"snssdk\\\"], [href*=\\\"open\\\"], [data-e2e*=\\\"like\\\"], [data-e2e*=\\\"comment\\\"] {\n" +
             "        display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; width:0!important; height:0!important;\n" +
             "      }\n" +
@@ -287,11 +289,12 @@ public class MainActivity extends Activity {
             "    let style = document.getElementById('kid-clean-style');\n" +
             "    if(!style){ style = document.createElement('style'); style.id='kid-clean-style'; document.head.appendChild(style); }\n" +
             "    style.textContent = css;\n" +
-            "    document.querySelectorAll('a,button,span').forEach(function(el){\n" +
+            "    document.querySelectorAll('a,button,span,div').forEach(function(el){\n" +
+            "      if(el.closest && el.closest('.footer') && !(el.innerText||el.textContent||'').match(/打开抖音看精彩视频|打开App|去抖音/)) return;\n" +
             "      const text=(el.innerText||el.textContent||'').trim();\n" +
             "      const cls=(el.className||'').toString();\n" +
             "      const href=(el.getAttribute&&el.getAttribute('href'))||'';\n" +
-            "      if(/打开|App|APP|抖音|关注|点赞|评论|收藏|分享|登录|下载/.test(text) || /open|download|login|follow|like|comment|favorite|share/i.test(cls+href)){\n" +
+            "      if(/打开抖音看精彩视频|打开App|去抖音|关注|点赞|评论|收藏|分享|登录|下载|播放/.test(text) || /open|download|login|follow|like|comment|favorite|share|play|pause|poster/i.test(cls+href)){\n" +
             "        el.style.setProperty('display','none','important');\n" +
             "        el.style.setProperty('visibility','hidden','important');\n" +
             "        el.style.setProperty('pointer-events','none','important');\n" +
@@ -299,6 +302,7 @@ public class MainActivity extends Activity {
             "    });\n" +
             "    ['root'].forEach(function(id){ const el=document.getElementById(id); if(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); } });\n" +
             "    document.querySelectorAll('.container,.video-container,.horizontal-video').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
+            "    document.querySelectorAll('img.poster,.poster,[class*=\\\"poster\\\"],[class*=\\\"play\\\"],[class*=\\\"Play\\\"]').forEach(function(el){ el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('opacity','0','important'); });\n" +
             "    const video=document.querySelector('video');\n" +
             "    let playing=false;\n" +
             "    if(video){\n" +
