@@ -2,9 +2,11 @@ import http from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { URL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const port = process.env.PORT || 3000;
-const dataFile = path.join(process.cwd(), 'videos.json');
+const appDir = path.dirname(fileURLToPath(import.meta.url));
+const dataFile = path.join(appDir, 'videos.json');
 
 const server = http.createServer(async (req, res) => {
   try {
