@@ -18,40 +18,29 @@ const server = http.createServer(async (req, res) => {
 
     const requestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
+    if (req.method === 'GET' && requestUrl.pathname === '/') {
+      sendHtml(res, 200, renderHome(await readVideos(), ''));
+      return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/push') {
+      const form = await readFormBody(req);
+      const rawText = String(form.text || '').trim();
+      const item = await addVideoFromText(rawText);
+      sendHtml(res, 200, renderHome(await readVideos(), `已保存：${item.shareUrl}`));
+      return;
+    }
+
     if (req.method === 'GET' && requestUrl.pathname === '/api/videos') {
+      res.setHeader('Cache-Control', 'no-store');
       sendJson(res, 200, await readVideos());
       return;
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/api/videos') {
       const body = await readJsonBody(req);
-      const shareUrl = String(body?.shareUrl || '').trim();
-      const title = String(body?.title || '抖音分享链接').trim();
-
-      if (!/^https?:\/\//i.test(shareUrl)) {
-        sendJson(res, 400, { error: 'shareUrl must be an http(s) url' });
-        return;
-      }
-
-      const videos = await readVideos();
-      const existing = videos.find((item) => item.shareUrl === shareUrl);
-      if (existing) {
-        sendJson(res, 200, existing);
-        return;
-      }
-
-      const item = {
-        id: new Date().toISOString().replace(/[-:.TZ]/g, ''),
-        source: 'douyin',
-        title,
-        shareUrl,
-        status: 'link-only',
-        videoUrl: null,
-        createdAt: new Date().toISOString()
-      };
-
-      videos.unshift(item);
-      await writeVideos(videos);
+      const rawText = String(body?.text || body?.shareText || body?.shareUrl || '').trim();
+      const item = await addVideoFromText(rawText, String(body?.title || '抖音分享链接').trim());
       sendJson(res, 201, item);
       return;
     }
@@ -67,13 +56,103 @@ const server = http.createServer(async (req, res) => {
 
     sendJson(res, 404, { error: 'not found' });
   } catch (error) {
-    sendJson(res, 500, { error: error.message || 'internal error' });
+    if (req.url === '/' || req.url === '/push') {
+      sendHtml(res, 400, renderHome(await safeReadVideos(), `保存失败：${error.message || 'unknown error'}`));
+    } else {
+      sendJson(res, 400, { error: error.message || 'bad request' });
+    }
   }
 });
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`Kid video push server listening on http://0.0.0.0:${port}`);
 });
+
+async function addVideoFromText(rawText, title = '抖音分享链接') {
+  const shareUrl = extractDouyinUrl(rawText);
+  if (!shareUrl) throw new Error('没有找到抖音链接');
+
+  const videos = await readVideos();
+  const existing = videos.find((item) => item.shareUrl === shareUrl);
+  if (existing) return existing;
+
+  const item = {
+    id: new Date().toISOString().replace(/[-:.TZ]/g, ''),
+    source: 'douyin',
+    title,
+    shareUrl,
+    status: 'link-only',
+    videoUrl: null,
+    createdAt: new Date().toISOString()
+  };
+
+  videos.unshift(item);
+  await writeVideos(videos);
+  return item;
+}
+
+function extractDouyinUrl(text) {
+  const source = String(text || '');
+  const shortMatch = source.match(/https?:\/\/v\.douyin\.com\/[^\s，,。]+\//i);
+  if (shortMatch) return shortMatch[0];
+
+  const videoMatch = source.match(/https?:\/\/(?:www\.)?douyin\.com\/video\/\d+/i);
+  if (videoMatch) return videoMatch[0];
+
+  const anyDouyin = source.match(/https?:\/\/[^\s，,。]*douyin\.com\/[^\s，,。]*/i);
+  return anyDouyin ? anyDouyin[0].replace(/[，,。\s]+$/g, '') : null;
+}
+
+function renderHome(videos, message) {
+  const rows = videos.map((item) => `
+    <li>
+      <div class="url">${escapeHtml(item.shareUrl)}</div>
+      <div class="meta">${escapeHtml(item.createdAt || '')}</div>
+    </li>
+  `).join('');
+
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>孩子视频推送后台</title>
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #111; color: #f5f5f5; }
+    main { max-width: 760px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 24px; }
+    textarea { width: 100%; min-height: 140px; box-sizing: border-box; border-radius: 12px; border: 1px solid #444; background: #1b1b1b; color: #fff; padding: 14px; font-size: 16px; }
+    button { margin-top: 12px; width: 100%; border: 0; border-radius: 999px; padding: 14px 18px; font-size: 17px; font-weight: 700; background: #1d9bf0; color: #fff; }
+    .message { margin: 14px 0; padding: 12px; border-radius: 10px; background: #173b22; color: #9dffb2; }
+    ul { padding: 0; list-style: none; }
+    li { margin: 10px 0; padding: 12px; border-radius: 10px; background: #1d1d1d; }
+    .url { word-break: break-all; }
+    .meta { margin-top: 6px; color: #999; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>孩子视频推送后台</h1>
+    <form method="post" action="/push">
+      <textarea name="text" placeholder="粘贴抖音复制出来的整段文字，例如：0.79 复制打开抖音... https://v.douyin.com/xxxx/ ..."></textarea>
+      <button type="submit">推送到平板</button>
+    </form>
+    ${message ? `<div class="message">${escapeHtml(message)}</div>` : ''}
+    <h2>已推送 ${videos.length} 条</h2>
+    <ul>${rows}</ul>
+  </main>
+</body>
+</html>`;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"]/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;'
+  }[char]));
+}
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -86,13 +165,34 @@ function sendJson(res, status, value) {
   res.end(JSON.stringify(value));
 }
 
+function sendHtml(res, status, html) {
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(html);
+}
+
 async function readJsonBody(req) {
-  const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(chunk);
-  }
-  const text = Buffer.concat(chunks).toString('utf8');
+  const text = await readTextBody(req);
   return text ? JSON.parse(text) : {};
+}
+
+async function readFormBody(req) {
+  const text = await readTextBody(req);
+  const params = new URLSearchParams(text);
+  return Object.fromEntries(params.entries());
+}
+
+async function readTextBody(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function safeReadVideos() {
+  try {
+    return await readVideos();
+  } catch {
+    return [];
+  }
 }
 
 async function readVideos() {

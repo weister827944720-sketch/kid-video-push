@@ -2,6 +2,9 @@ package com.kidvideopush.app;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -52,9 +55,24 @@ public class MainActivity extends Activity {
         if (Intent.ACTION_SEND.equals(getIntent().getAction())) {
             String text = getIntent().getStringExtra(Intent.EXTRA_TEXT);
             showPushMode(text == null ? "" : text);
+            return;
+        }
+
+        String clipboardText = readClipboardText();
+        if (extractDouyinUrl(clipboardText) != null) {
+            showPushMode(clipboardText);
         } else {
             showPlayerMode();
         }
+    }
+
+    private String readClipboardText() {
+        ClipboardManager manager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (manager == null || !manager.hasPrimaryClip()) return "";
+        ClipData clip = manager.getPrimaryClip();
+        if (clip == null || clip.getItemCount() == 0) return "";
+        CharSequence text = clip.getItemAt(0).coerceToText(this);
+        return text == null ? "" : text.toString();
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -94,11 +112,7 @@ public class MainActivity extends Activity {
                 if (e1 == null || e2 == null || videos.isEmpty()) return false;
                 float diffY = e2.getY() - e1.getY();
                 if (Math.abs(diffY) > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
-                    if (diffY < 0) {
-                        playNext();
-                    } else {
-                        playPrevious();
-                    }
+                    if (diffY < 0) playNext(); else playPrevious();
                     return true;
                 }
                 return false;
@@ -127,7 +141,7 @@ public class MainActivity extends Activity {
                     videos.clear();
                     videos.addAll(result);
                     if (videos.isEmpty()) {
-                        showOverlay("还没有推送视频\n从家长手机抖音分享视频到本 App");
+                        showOverlay("还没有推送视频\n复制抖音分享文字后打开本 App\n或访问后台网页粘贴推送");
                     } else {
                         currentIndex = 0;
                         playCurrent();
@@ -184,22 +198,26 @@ public class MainActivity extends Activity {
         text.setTextColor(Color.WHITE);
         text.setTextSize(18);
         text.setGravity(Gravity.CENTER);
-        text.setText("正在推送给平板...");
+        text.setText("检测到抖音链接\n正在推送给平板...");
         frame.addView(text, new FrameLayout.LayoutParams(-1, -1));
         setContentView(frame);
 
         new Thread(() -> {
             String result;
             try {
-                pushLink(SERVER_URL, sharedText);
-                result = "已推送\n平板打开 App 后会自动出现";
+                String link = extractDouyinUrl(sharedText);
+                if (link == null) throw new Exception("没有找到抖音链接");
+                pushLink(SERVER_URL, link);
+                result = "已推送到平板\n" + link;
             } catch (Exception e) {
                 result = "推送失败\n" + e.getMessage();
             }
             String finalResult = result;
             runOnUiThread(() -> {
                 text.setText(finalResult);
-                text.postDelayed(this::finish, 1800);
+                text.postDelayed(() -> {
+                    if (finalResult.startsWith("已推送")) finish();
+                }, 1800);
             });
         }).start();
     }
@@ -218,9 +236,7 @@ public class MainActivity extends Activity {
             "  document.head.appendChild(style);\n" +
             "})();";
 
-    private static void pushLink(String serverUrl, String rawText) throws Exception {
-        String link = extractFirstUrl(rawText);
-        if (link == null) link = rawText.trim();
+    private static void pushLink(String serverUrl, String link) throws Exception {
         URL url = new URL(serverUrl.replaceAll("/$", "") + "/api/videos");
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("POST");
@@ -228,6 +244,7 @@ public class MainActivity extends Activity {
         conn.setDoOutput(true);
         JSONObject body = new JSONObject();
         body.put("shareUrl", link);
+        body.put("text", link);
         body.put("title", "抖音分享链接");
         try (OutputStreamWriter writer = new OutputStreamWriter(conn.getOutputStream(), "UTF-8")) {
             writer.write(body.toString());
@@ -249,14 +266,22 @@ public class MainActivity extends Activity {
         List<VideoItem> items = new ArrayList<>(array.length());
         for (int i = 0; i < array.length(); i++) {
             JSONObject obj = array.getJSONObject(i);
-            items.add(new VideoItem(obj.optString("shareUrl")));
+            String shareUrl = obj.optString("shareUrl");
+            if (extractDouyinUrl(shareUrl) != null) items.add(new VideoItem(shareUrl));
         }
         return items;
     }
 
-    private static String extractFirstUrl(String text) {
-        Matcher m = Pattern.compile("https?://\\S+").matcher(text);
-        if (m.find()) return m.group().replaceAll("[，,。.\\s]+$", "");
+    private static String extractDouyinUrl(String text) {
+        if (text == null) return null;
+        Matcher shortMatcher = Pattern.compile("https?://v\\.douyin\\.com/[^\\s，,。]+/", Pattern.CASE_INSENSITIVE).matcher(text);
+        if (shortMatcher.find()) return shortMatcher.group();
+
+        Matcher videoMatcher = Pattern.compile("https?://(?:www\\.)?douyin\\.com/video/\\d+", Pattern.CASE_INSENSITIVE).matcher(text);
+        if (videoMatcher.find()) return videoMatcher.group();
+
+        Matcher anyMatcher = Pattern.compile("https?://[^\\s，,。]*douyin\\.com/[^\\s，,。]*", Pattern.CASE_INSENSITIVE).matcher(text);
+        if (anyMatcher.find()) return anyMatcher.group().replaceAll("[，,。\\s]+$", "");
         return null;
     }
 
