@@ -1,6 +1,7 @@
 package com.kidvideopush.app;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -16,8 +17,6 @@ import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import androidx.activity.ComponentActivity;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -29,7 +28,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class MainActivity extends ComponentActivity {
+public class MainActivity extends Activity {
 
     private static final String DEFAULT_SERVER = "http://n.dujiaoxian.online:35039";
 
