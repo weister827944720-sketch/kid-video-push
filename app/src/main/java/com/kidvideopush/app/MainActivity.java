@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
     private TextView overlay;
     private GestureDetector gestureDetector;
     private int currentIndex = 0;
+    private String lastDebugUrl = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -191,6 +192,26 @@ public class MainActivity extends Activity {
         webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 500);
         webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 1500);
         webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 3000);
+        webView.postDelayed(this::captureDomDebug, 2500);
+    }
+
+    private void captureDomDebug() {
+        if (webView == null) return;
+        String currentUrl = webView.getUrl() == null ? "" : webView.getUrl();
+        if (currentUrl.equals(lastDebugUrl)) return;
+        lastDebugUrl = currentUrl;
+        webView.evaluateJavascript(DOM_DEBUG_JS, value -> {
+            if (value == null || value.equals("null")) return;
+            new Thread(() -> {
+                try {
+                    JSONObject body = new JSONObject();
+                    body.put("webViewUrl", currentUrl);
+                    body.put("payload", new JSONArray("[" + value + "]").get(0));
+                    postJson(SERVER_URL + "/debug/dom", body);
+                } catch (Exception ignored) {
+                }
+            }).start();
+        });
     }
 
     private void showOverlay(String text) {
@@ -274,6 +295,20 @@ public class MainActivity extends Activity {
             "  setInterval(hideNoise, 700);\n" +
             "})();";
 
+    private static final String DOM_DEBUG_JS =
+            "(function(){\n" +
+            "  function shortText(v){ return (v||'').replace(/\\s+/g,' ').trim().slice(0,200); }\n" +
+            "  function item(el){ return { tag: el.tagName, id: el.id||'', cls: (el.className||'').toString().slice(0,300), text: shortText(el.innerText||el.textContent), href: el.getAttribute&&el.getAttribute('href')||'', role: el.getAttribute&&el.getAttribute('role')||'', dataE2e: el.getAttribute&&el.getAttribute('data-e2e')||'', aria: el.getAttribute&&el.getAttribute('aria-label')||'' }; }\n" +
+            "  var noisy=[];\n" +
+            "  document.querySelectorAll('a,button,div,span').forEach(function(el){\n" +
+            "    var s=[el.innerText, el.textContent, el.className, el.id, el.getAttribute&&el.getAttribute('href'), el.getAttribute&&el.getAttribute('aria-label'), el.getAttribute&&el.getAttribute('data-e2e')].join(' ');\n" +
+            "    if(/打开|App|APP|抖音|关注|点赞|评论|收藏|分享|登录|下载|open|download|login|follow|like|comment|favorite|share/i.test(s)){ noisy.push(item(el)); }\n" +
+            "  });\n" +
+            "  var buttons=Array.prototype.slice.call(document.querySelectorAll('button,[role=button],a')).slice(0,160).map(item);\n" +
+            "  var videos=Array.prototype.slice.call(document.querySelectorAll('video')).map(function(v){ return { src: v.currentSrc||v.src||'', paused:v.paused, muted:v.muted, controls:v.controls, autoplay:v.autoplay, width:v.videoWidth, height:v.videoHeight, cls:(v.className||'').toString() }; });\n" +
+            "  return { url: location.href, title: document.title, bodyText: shortText(document.body&&document.body.innerText), videos: videos, buttons: buttons, noisy: noisy.slice(0,220), htmlSample: (document.body&&document.body.outerHTML||'').slice(0,12000) };\n" +
+            "})();";
+
     private static void pushLink(String serverUrl, String link) throws Exception {
         URL url = new URL(serverUrl.replaceAll("/$", "") + "/api/videos");
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -284,11 +319,25 @@ public class MainActivity extends Activity {
         body.put("shareUrl", link);
         body.put("text", link);
         body.put("title", "抖音分享链接");
+        writeJson(conn, body);
+        int code = conn.getResponseCode();
+        if (code < 200 || code > 299) throw new Exception("HTTP " + code);
+    }
+
+    private static void postJson(String urlString, JSONObject body) throws Exception {
+        URL url = new URL(urlString);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+        conn.setDoOutput(true);
+        writeJson(conn, body);
+        conn.getResponseCode();
+    }
+
+    private static void writeJson(HttpURLConnection conn, JSONObject body) throws Exception {
         try (OutputStreamWriter writer = new OutputStreamWriter(conn.getOutputStream(), "UTF-8")) {
             writer.write(body.toString());
         }
-        int code = conn.getResponseCode();
-        if (code < 200 || code > 299) throw new Exception("HTTP " + code);
     }
 
     private static List<VideoItem> fetchVideos(String serverUrl) throws Exception {

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const port = process.env.PORT || 3000;
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const dataFile = path.join(appDir, 'videos.json');
+const domDebugFile = path.join(appDir, 'dom-debug.json');
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -44,6 +45,27 @@ const server = http.createServer(async (req, res) => {
       const rawText = String(body?.text || body?.shareText || body?.shareUrl || '').trim();
       const item = await addVideoFromText(rawText, String(body?.title || '抖音分享链接').trim());
       sendJson(res, 201, item);
+      return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/debug/dom') {
+      const body = await readJsonBody(req);
+      const entry = {
+        receivedAt: new Date().toISOString(),
+        ...body
+      };
+      await fs.writeFile(domDebugFile, `${JSON.stringify(entry, null, 2)}\n`, 'utf8');
+      sendJson(res, 201, { ok: true, savedAt: entry.receivedAt });
+      return;
+    }
+
+    if (req.method === 'GET' && requestUrl.pathname === '/debug/dom') {
+      const data = await readDomDebug();
+      if (requestUrl.searchParams.get('raw') === '1') {
+        sendJson(res, 200, data || {});
+      } else {
+        sendHtml(res, 200, renderDomDebug(data));
+      }
       return;
     }
 
@@ -125,6 +147,7 @@ function renderHome(videos, message) {
     h1 { font-size: 24px; }
     textarea { width: 100%; min-height: 140px; box-sizing: border-box; border-radius: 12px; border: 1px solid #444; background: #1b1b1b; color: #fff; padding: 14px; font-size: 16px; }
     button { margin-top: 12px; width: 100%; border: 0; border-radius: 999px; padding: 14px 18px; font-size: 17px; font-weight: 700; background: #1d9bf0; color: #fff; }
+    a { color: #8ecbff; }
     .message { margin: 14px 0; padding: 12px; border-radius: 10px; background: #173b22; color: #9dffb2; }
     ul { padding: 0; list-style: none; }
     li { margin: 10px 0; padding: 12px; border-radius: 10px; background: #1d1d1d; }
@@ -135,6 +158,7 @@ function renderHome(videos, message) {
 <body>
   <main>
     <h1>孩子视频推送后台</h1>
+    <p><a href="/debug/dom">查看 WebView DOM 调试数据</a></p>
     <form method="post" action="/push">
       <textarea name="text" placeholder="粘贴抖音复制出来的整段文字，例如：0.79 复制打开抖音... https://v.douyin.com/xxxx/ ..."></textarea>
       <button type="submit">推送到平板</button>
@@ -142,6 +166,30 @@ function renderHome(videos, message) {
     ${message ? `<div class="message">${escapeHtml(message)}</div>` : ''}
     <h2>已推送 ${videos.length} 条</h2>
     <ul>${rows}</ul>
+  </main>
+</body>
+</html>`;
+}
+
+function renderDomDebug(data) {
+  const body = data ? JSON.stringify(data, null, 2) : '还没有采集到 DOM。安装新版 APK 后打开一个视频页面，等待几秒再刷新这里。';
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WebView DOM 调试</title>
+  <style>
+    body { margin: 0; background: #111; color: #eee; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    main { padding: 20px; }
+    a { color: #8ecbff; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #1d1d1d; padding: 16px; border-radius: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="/">返回后台</a> | <a href="/debug/dom?raw=1">查看 JSON</a></p>
+    <pre>${escapeHtml(body)}</pre>
   </main>
 </body>
 </html>`;
@@ -194,6 +242,15 @@ async function safeReadVideos() {
     return await readVideos();
   } catch {
     return [];
+  }
+}
+
+async function readDomDebug() {
+  try {
+    return JSON.parse(await fs.readFile(domDebugFile, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
   }
 }
 
