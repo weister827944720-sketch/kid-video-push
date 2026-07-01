@@ -22,5 +22,4 @@ android {
 
 dependencies {
     implementation("androidx.activity:activity:1.9.3")
-    implementation("androidx.webkit:webkit:1.12.1")
 }
