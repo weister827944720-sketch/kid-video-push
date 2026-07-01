@@ -260,13 +260,13 @@ public class MainActivity extends Activity {
             "(function() {\n" +
             "  function hideNoise(){\n" +
             "    const css = `\n" +
-            "      html, body { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; }\n" +
-            "      video { width:100vw!important; height:100vh!important; object-fit:cover!important; position:fixed!important; inset:0!important; z-index:1!important; background:#000!important; }\n" +
-            "      header, footer, nav, aside, button, [role=button], [class*=\\\"comment\\\"], [class*=\\\"Comment\\\"],\n" +
-            "      [class*=\\\"like\\\"], [class*=\\\"Like\\\"], [class*=\\\"favorite\\\"], [class*=\\\"Favorite\\\"],\n" +
-            "      [class*=\\\"share\\\"], [class*=\\\"Share\\\"], [class*=\\\"open\\\"], [class*=\\\"Open\\\"],\n" +
-            "      [class*=\\\"download\\\"], [class*=\\\"Download\\\"], [class*=\\\"login\\\"], [class*=\\\"Login\\\"],\n" +
-            "      [class*=\\\"avatar\\\"], [class*=\\\"Avatar\\\"], [class*=\\\"follow\\\"], [class*=\\\"Follow\\\"],\n" +
+            "      html, body, #root, .container, .video-container { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; }\n" +
+            "      .video-container, .horizontal-video { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
+            "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:cover!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
+            "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .footer, .bottom-btn-con-new, .right-con,\n" +
+            "      .end-page-info, .end-page-info__container, .end-page-info__waterfall, .end-page-info-button,\n" +
+            "      .arco-masking, .arco-popup, .commentBoard_8924a, .commentBoardTopBanner_8924a, .commentList_8924a,\n" +
+            "      .video-card__like, .video-card__like__count, .video-card__cover__wrapper, .progress_small-wrapper,\n" +
             "      [href*=\\\"download\\\"], [href*=\\\"snssdk\\\"], [href*=\\\"open\\\"], [data-e2e*=\\\"like\\\"], [data-e2e*=\\\"comment\\\"] {\n" +
             "        display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; width:0!important; height:0!important;\n" +
             "      }\n" +
@@ -274,7 +274,7 @@ public class MainActivity extends Activity {
             "    let style = document.getElementById('kid-clean-style');\n" +
             "    if(!style){ style = document.createElement('style'); style.id='kid-clean-style'; document.head.appendChild(style); }\n" +
             "    style.textContent = css;\n" +
-            "    document.querySelectorAll('a,button,div,span').forEach(function(el){\n" +
+            "    document.querySelectorAll('a,button,span').forEach(function(el){\n" +
             "      const text=(el.innerText||el.textContent||'').trim();\n" +
             "      const cls=(el.className||'').toString();\n" +
             "      const href=(el.getAttribute&&el.getAttribute('href'))||'';\n" +
@@ -284,6 +284,8 @@ public class MainActivity extends Activity {
             "        el.style.setProperty('pointer-events','none','important');\n" +
             "      }\n" +
             "    });\n" +
+            "    ['root'].forEach(function(id){ const el=document.getElementById(id); if(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); } });\n" +
+            "    document.querySelectorAll('.container,.video-container,.horizontal-video').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
             "    const video=document.querySelector('video');\n" +
             "    if(video){\n" +
             "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
