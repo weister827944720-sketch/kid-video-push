@@ -18,7 +18,6 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import org.json.JSONArray;
@@ -38,26 +37,16 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
 
     private static final String SERVER_URL = "http://n.dujiaoxian.online:35039";
-    private static final int MODE_A = 0;
-    private static final int MODE_B = 1;
     private static final int SWIPE_THRESHOLD = 120;
     private static final int SWIPE_VELOCITY_THRESHOLD = 120;
 
     private final List<VideoItem> videos = new ArrayList<>();
     private FrameLayout root;
+    private WebView webView;
     private TextView overlay;
     private View gestureLayer;
-    private LinearLayout tabs;
-    private TextView tabA;
-    private TextView tabB;
     private GestureDetector gestureDetector;
     private int currentIndex = 0;
-    private int mode = MODE_A;
-
-    private WebView webViewA;
-    private WebView preloadWebViewA;
-    private WebView parserWebViewB;
-    private WebView playerWebViewB;
     private String lastDebugUrl = "";
 
     @Override
@@ -94,18 +83,31 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
 
-        webViewA = createDouyinWebView();
-        preloadWebViewA = createDouyinWebView();
-        preloadWebViewA.setVisibility(View.GONE);
-        parserWebViewB = createDouyinWebView();
-        parserWebViewB.setVisibility(View.GONE);
-        playerWebViewB = createPlainWebView();
-        playerWebViewB.setVisibility(View.GONE);
+        webView = new WebView(this);
+        webView.setBackgroundColor(Color.BLACK);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.getSettings().setDomStorageEnabled(true);
+        webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+        webView.getSettings().setLoadWithOverviewMode(false);
+        webView.getSettings().setUseWideViewPort(false);
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String scheme = request.getUrl().getScheme();
+                String url = request.getUrl().toString();
+                if (!"http".equals(scheme) && !"https".equals(scheme)) return true;
+                return url.contains("/download") || url.contains("open.douyin") || url.contains("snssdk");
+            }
 
-        root.addView(webViewA, new FrameLayout.LayoutParams(-1, -1));
-        root.addView(preloadWebViewA, new FrameLayout.LayoutParams(-1, -1));
-        root.addView(parserWebViewB, new FrameLayout.LayoutParams(1, 1));
-        root.addView(playerWebViewB, new FrameLayout.LayoutParams(-1, -1));
+            @Override
+            public void onPageFinished(WebView view, String loadedUrl) {
+                injectCleaner();
+            }
+        });
+        root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
 
         overlay = new TextView(this);
         overlay.setTextColor(Color.WHITE);
@@ -134,87 +136,10 @@ public class MainActivity extends Activity {
             return true;
         });
         root.addView(gestureLayer, new FrameLayout.LayoutParams(-1, -1));
-        addTabs();
 
         setContentView(root);
         showOverlay("正在加载推荐视频...");
         loadVideos();
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private WebView createPlainWebView() {
-        WebView view = new WebView(this);
-        view.setBackgroundColor(Color.BLACK);
-        view.setVerticalScrollBarEnabled(false);
-        view.setHorizontalScrollBarEnabled(false);
-        view.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        view.getSettings().setJavaScriptEnabled(true);
-        view.getSettings().setDomStorageEnabled(true);
-        view.getSettings().setMediaPlaybackRequiresUserGesture(false);
-        return view;
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private WebView createDouyinWebView() {
-        WebView view = createPlainWebView();
-        view.getSettings().setLoadWithOverviewMode(false);
-        view.getSettings().setUseWideViewPort(false);
-        view.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView webView, WebResourceRequest request) {
-                String scheme = request.getUrl().getScheme();
-                String url = request.getUrl().toString();
-                if (!"http".equals(scheme) && !"https".equals(scheme)) return true;
-                return url.contains("/download") || url.contains("open.douyin") || url.contains("snssdk");
-            }
-
-            @Override
-            public void onPageFinished(WebView webView, String loadedUrl) {
-                injectCleaner(webView);
-            }
-        });
-        return view;
-    }
-
-    private void addTabs() {
-        tabs = new LinearLayout(this);
-        tabs.setOrientation(LinearLayout.HORIZONTAL);
-        tabs.setBackgroundColor(0x99000000);
-
-        tabA = makeTab("A方案");
-        tabB = makeTab("B方案");
-        tabs.addView(tabA, new LinearLayout.LayoutParams(0, -1, 1));
-        tabs.addView(tabB, new LinearLayout.LayoutParams(0, -1, 1));
-
-        tabA.setOnClickListener(v -> switchMode(MODE_A));
-        tabB.setOnClickListener(v -> switchMode(MODE_B));
-
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-1, 72);
-        params.gravity = Gravity.BOTTOM;
-        root.addView(tabs, params);
-        updateTabs();
-    }
-
-    private TextView makeTab(String text) {
-        TextView tab = new TextView(this);
-        tab.setText(text);
-        tab.setTextSize(15);
-        tab.setGravity(Gravity.CENTER);
-        tab.setTextColor(Color.WHITE);
-        return tab;
-    }
-
-    private void switchMode(int newMode) {
-        if (mode == newMode) return;
-        mode = newMode;
-        updateTabs();
-        playCurrent();
-    }
-
-    private void updateTabs() {
-        if (tabA == null || tabB == null) return;
-        tabA.setBackgroundColor(mode == MODE_A ? 0xCC1D9BF0 : 0x66000000);
-        tabB.setBackgroundColor(mode == MODE_B ? 0xCC1D9BF0 : 0x66000000);
     }
 
     private void loadVideos() {
@@ -242,60 +167,9 @@ public class MainActivity extends Activity {
         if (videos.isEmpty()) return;
         if (currentIndex < 0) currentIndex = 0;
         if (currentIndex >= videos.size()) currentIndex = videos.size() - 1;
-        overlay.setVisibility(View.GONE);
-        if (mode == MODE_A) playModeA(); else playModeB();
-        updateTabs();
-        if (tabs != null) tabs.bringToFront();
-        if (gestureLayer != null) gestureLayer.bringToFront();
-        if (tabs != null) tabs.bringToFront();
-    }
-
-    private void playModeA() {
-        playerWebViewB.setVisibility(View.GONE);
-        parserWebViewB.setVisibility(View.GONE);
-        webViewA.setVisibility(View.VISIBLE);
-        preloadWebViewA.setVisibility(View.GONE);
-        webViewA.loadUrl(videos.get(currentIndex).shareUrl);
-        preloadNextA();
-    }
-
-    private void preloadNextA() {
-        int next = currentIndex + 1;
-        if (next >= videos.size()) return;
-        preloadWebViewA.loadUrl(videos.get(next).shareUrl);
-    }
-
-    private void playModeB() {
-        webViewA.setVisibility(View.GONE);
-        preloadWebViewA.setVisibility(View.GONE);
-        parserWebViewB.setVisibility(View.GONE);
-        playerWebViewB.setVisibility(View.VISIBLE);
-        showTemporaryOverlay("B方案解析中...");
-        parserWebViewB.loadUrl(videos.get(currentIndex).shareUrl);
-        extractPlayUrlWithRetries(0);
-    }
-
-    private void extractPlayUrlWithRetries(int attempt) {
-        parserWebViewB.postDelayed(() -> parserWebViewB.evaluateJavascript(EXTRACT_PLAY_URL_JS, value -> {
-            String playUrl = unquoteJsString(value);
-            if (playUrl != null && playUrl.startsWith("http")) {
-                playPlainVideo(playUrl);
-            } else if (attempt < 8) {
-                extractPlayUrlWithRetries(attempt + 1);
-            } else {
-                showTemporaryOverlay("B方案解析失败，切回A方案");
-                mode = MODE_A;
-                playCurrent();
-            }
-        }), attempt == 0 ? 1200 : 700);
-    }
-
-    private void playPlainVideo(String playUrl) {
-        String html = "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>" +
-                "<style>html,body{margin:0;background:#000;overflow:hidden}video{width:100vw;height:100vh;object-fit:contain;background:#000}</style></head>" +
-                "<body><video src='" + escapeHtmlAttr(playUrl) + "' autoplay playsinline loop></video>" +
-                "<script>const v=document.querySelector('video');v.controls=false;v.muted=false;function p(){const x=v.play();if(x&&x.catch)x.catch(function(){});}v.oncanplay=p;setInterval(p,500);</script></body></html>";
-        playerWebViewB.loadDataWithBaseURL("https://m.douyin.com/", html, "text/html", "UTF-8", null);
+        VideoItem item = videos.get(currentIndex);
+        showOverlay("正在播放...");
+        webView.loadUrl(item.shareUrl);
     }
 
     private void playNext() {
@@ -316,21 +190,22 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void injectCleaner(WebView target) {
-        target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null);
-        target.postDelayed(() -> target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 300);
-        target.postDelayed(() -> target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 800);
-        target.postDelayed(() -> target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 1500);
-        target.postDelayed(() -> target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 3000);
-        if (target == webViewA) target.postDelayed(this::captureDomDebug, 2500);
+    private void injectCleaner() {
+        webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 500);
+        webView.postDelayed(() -> overlay.setVisibility(View.GONE), 1200);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 1500);
+        webView.postDelayed(() -> overlay.setVisibility(View.GONE), 1800);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 3000);
+        webView.postDelayed(this::captureDomDebug, 2500);
     }
 
     private void captureDomDebug() {
-        if (webViewA == null) return;
-        String currentUrl = webViewA.getUrl() == null ? "" : webViewA.getUrl();
+        if (webView == null) return;
+        String currentUrl = webView.getUrl() == null ? "" : webView.getUrl();
         if (currentUrl.equals(lastDebugUrl)) return;
         lastDebugUrl = currentUrl;
-        webViewA.evaluateJavascript(DOM_DEBUG_JS, value -> {
+        webView.evaluateJavascript(DOM_DEBUG_JS, value -> {
             if (value == null || value.equals("null")) return;
             new Thread(() -> {
                 try {
@@ -348,14 +223,12 @@ public class MainActivity extends Activity {
         overlay.setText(text);
         overlay.setVisibility(View.VISIBLE);
         overlay.bringToFront();
-        if (tabs != null) tabs.bringToFront();
     }
 
     private void showTemporaryOverlay(String text) {
         overlay.setText(text);
         overlay.setVisibility(View.VISIBLE);
         overlay.bringToFront();
-        if (tabs != null) tabs.bringToFront();
         overlay.postDelayed(() -> overlay.setVisibility(View.GONE), 800);
     }
 
@@ -412,7 +285,7 @@ public class MainActivity extends Activity {
             "      const text=(el.innerText||el.textContent||'').trim();\n" +
             "      const cls=(el.className||'').toString();\n" +
             "      const href=(el.getAttribute&&el.getAttribute('href'))||'';\n" +
-            "      if(/打开|App|APP|抖音|关注|点赞|评论|收藏|分享|登录|下载|播放/.test(text) || /open|download|login|follow|like|comment|favorite|share|play|pause/i.test(cls+href)){\n" +
+            "      if(/打开|App|APP|抖音|关注|点赞|评论|收藏|分享|登录|下载/.test(text) || /open|download|login|follow|like|comment|favorite|share/i.test(cls+href)){\n" +
             "        el.style.setProperty('display','none','important');\n" +
             "        el.style.setProperty('visibility','hidden','important');\n" +
             "        el.style.setProperty('pointer-events','none','important');\n" +
@@ -428,11 +301,8 @@ public class MainActivity extends Activity {
             "    }\n" +
             "  }\n" +
             "  hideNoise();\n" +
-            "  setInterval(hideNoise, 400);\n" +
+            "  setInterval(hideNoise, 700);\n" +
             "})();";
-
-    private static final String EXTRACT_PLAY_URL_JS =
-            "(function(){ var v=document.querySelector('video'); if(!v) return ''; var src=v.currentSrc||v.src||''; if(src && src.indexOf('http')!==0){ src=new URL(src, location.href).href; } return src; })();";
 
     private static final String DOM_DEBUG_JS =
             "(function(){\n" +
@@ -511,20 +381,6 @@ public class MainActivity extends Activity {
         Matcher anyMatcher = Pattern.compile("https?://[^\\s，,。]*douyin\\.com/[^\\s，,。]*", Pattern.CASE_INSENSITIVE).matcher(text);
         if (anyMatcher.find()) return anyMatcher.group().replaceAll("[，,。\\s]+$", "");
         return null;
-    }
-
-    private static String unquoteJsString(String value) {
-        if (value == null || value.equals("null")) return null;
-        try {
-            return new JSONArray("[" + value + "]").optString(0, null);
-        } catch (Exception e) {
-            return value.replace("\\\"", "").replace("\"", "");
-        }
-    }
-
-    private static String escapeHtmlAttr(String value) {
-        if (value == null) return "";
-        return value.replace("&", "&amp;").replace("'", "&#39;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private static class VideoItem {
