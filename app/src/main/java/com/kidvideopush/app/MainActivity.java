@@ -44,7 +44,6 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private WebView webView;
     private TextView overlay;
-    private View gestureLayer;
     private GestureDetector gestureDetector;
     private int currentIndex = 0;
     private String lastDebugUrl = "";
@@ -129,13 +128,10 @@ public class MainActivity extends Activity {
             }
         });
 
-        gestureLayer = new View(this);
-        gestureLayer.setBackgroundColor(Color.TRANSPARENT);
-        gestureLayer.setOnTouchListener((v, event) -> {
+        webView.setOnTouchListener((v, event) -> {
             gestureDetector.onTouchEvent(event);
-            return true;
+            return false;
         });
-        root.addView(gestureLayer, new FrameLayout.LayoutParams(-1, -1));
 
         setContentView(root);
         showOverlay("正在加载推荐视频...");
@@ -268,7 +264,7 @@ public class MainActivity extends Activity {
             "(function() {\n" +
             "  function hideNoise(){\n" +
             "    const css = `\n" +
-            "      html, body, #root, .container, .video-container { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; }\n" +
+            "      html, body, #root, .container, .video-container { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; pointer-events:auto!important; }\n" +
             "      .video-container, .horizontal-video { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
             "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
             "      .footer { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:0!important; z-index:3!important; pointer-events:none!important; color:#fff!important; }\n" +
@@ -302,7 +298,7 @@ public class MainActivity extends Activity {
             "    if(video){\n" +
             "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
             "      video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important';\n" +
-            "      video.preload='auto'; try{ video.load(); }catch(e){} const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
+            "      video.preload='auto'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
             "    }\n" +
             "  }\n" +
             "  hideNoise();\n" +
