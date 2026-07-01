@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
         overlay.setTextColor(Color.WHITE);
         overlay.setTextSize(16);
         overlay.setGravity(Gravity.CENTER);
-        overlay.setBackgroundColor(0x66000000);
+        overlay.setBackgroundColor(Color.TRANSPARENT);
         root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
 
         gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
@@ -168,7 +168,7 @@ public class MainActivity extends Activity {
         if (currentIndex < 0) currentIndex = 0;
         if (currentIndex >= videos.size()) currentIndex = videos.size() - 1;
         VideoItem item = videos.get(currentIndex);
-        showOverlay("正在播放...");
+        overlay.setVisibility(View.GONE);
         webView.loadUrl(item.shareUrl);
     }
 
@@ -192,8 +192,9 @@ public class MainActivity extends Activity {
 
     private void injectCleaner() {
         webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 80);
         webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 250);
-        webView.postDelayed(() -> overlay.setVisibility(View.GONE), 700);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 500);
         webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 900);
         webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 1500);
         webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 2500);
@@ -271,7 +272,7 @@ public class MainActivity extends Activity {
             "      .video-container, .horizontal-video { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
             "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
             "      .footer { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:0!important; z-index:3!important; pointer-events:none!important; color:#fff!important; }\n" +
-            "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .poster, .video-msg-container, .bottom-btn-con-new, .right-con,\n" +
+            "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .video-msg-container, .bottom-btn-con-new, .right-con,\n" +
             "      .end-page-info, .end-page-info__container, .end-page-info__waterfall, .end-page-info-button,\n" +
             "      .arco-masking, .arco-popup, .commentBoard_8924a, .commentBoardTopBanner_8924a, .commentList_8924a,\n" +
             "      .video-card__like, .video-card__like__count, .video-card__cover__wrapper, .progress_small-wrapper,\n" +
@@ -296,12 +297,12 @@ public class MainActivity extends Activity {
             "    });\n" +
             "    ['root'].forEach(function(id){ const el=document.getElementById(id); if(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); } });\n" +
             "    document.querySelectorAll('.container,.video-container,.horizontal-video').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
-            "    document.querySelectorAll('img.poster,.poster,[class*=\\\"poster\\\"],[class*=\\\"play\\\"],[class*=\\\"Play\\\"],[class*=\\\"pause\\\"],[class*=\\\"Pause\\\"],svg,canvas').forEach(function(el){ if(el.tagName==='VIDEO') return; el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('opacity','0','important'); });\n" +
+            "    document.querySelectorAll('[class*=\\\"play\\\"],[class*=\\\"Play\\\"],[class*=\\\"pause\\\"],[class*=\\\"Pause\\\"],svg,canvas').forEach(function(el){ if(el.tagName==='VIDEO' || (el.className||'').toString().indexOf('poster')>=0) return; el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('opacity','0','important'); });\n" +
             "    const video=document.querySelector('video');\n" +
             "    if(video){\n" +
             "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
             "      video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important';\n" +
-            "      const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
+            "      video.preload='auto'; try{ video.load(); }catch(e){} const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
             "    }\n" +
             "  }\n" +
             "  hideNoise();\n" +
