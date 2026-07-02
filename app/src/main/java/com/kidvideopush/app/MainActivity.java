@@ -1,6 +1,7 @@
 package com.kidvideopush.app;
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -17,6 +18,7 @@ import android.view.Window;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -37,7 +39,7 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
 
-    private static final String SERVER_URL = "http://n.dujiaoxian.online:35039";
+    private static final String DEFAULT_SERVER_URL = "http://n.dujiaoxian.online:35039";
     private static final int SWIPE_THRESHOLD = 120;
     private static final int SWIPE_VELOCITY_THRESHOLD = 120;
     private static final int TAB_AGGREGATE = 0;
@@ -46,6 +48,8 @@ public class MainActivity extends Activity {
     private static final int TAB_MINE = 3;
     private static final String PREFS_NAME = "kid_video_push";
     private static final String PREF_LAST_CLIPBOARD_URL = "lastPushedClipboardUrl";
+    private static final String PREF_SERVER_URL = "serverUrl";
+    private static final String SERVER_EDIT_PASSWORD = "12345";
 
     private final List<VideoItem> allVideos = new ArrayList<>();
     private final List<VideoItem> videos = new ArrayList<>();
@@ -99,6 +103,16 @@ public class MainActivity extends Activity {
     private void saveLastPushedClipboardUrl(String url) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         prefs.edit().putString(PREF_LAST_CLIPBOARD_URL, url).apply();
+    }
+
+    private String getServerUrl() {
+        String value = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_SERVER_URL, DEFAULT_SERVER_URL);
+        if (value == null || value.trim().isEmpty()) return DEFAULT_SERVER_URL;
+        return value.trim().replaceAll("/+$", "");
+    }
+
+    private void saveServerUrl(String url) {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(PREF_SERVER_URL, url.trim().replaceAll("/+$", "")).apply();
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -207,7 +221,8 @@ public class MainActivity extends Activity {
         panel.addView(subtitle, subtitleParams);
 
         panel.addView(createMineButton("哔哩哔哩登录 / 扫码", 0xFF102233, () -> openMineUrl("https://passport.bilibili.com/login")));
-        panel.addView(createMineButton("管理/删除视频连接", 0xFF2A1D12, () -> openMineUrl(SERVER_URL + "/admin")));
+        panel.addView(createMineButton("管理/删除视频连接", 0xFF2A1D12, () -> openMineUrl(getServerUrl() + "/admin")));
+        panel.addView(createMineButton("修改服务器地址", 0xFF1D2A12, this::showServerPasswordDialog));
         return panel;
     }
 
@@ -229,6 +244,47 @@ public class MainActivity extends Activity {
         minePanel.setVisibility(View.GONE);
         webView.setVisibility(View.VISIBLE);
         webView.loadUrl(url);
+    }
+
+    private void showServerPasswordDialog() {
+        EditText input = new EditText(this);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        input.setHint("请输入密码");
+        new AlertDialog.Builder(this)
+                .setTitle("修改服务器地址")
+                .setMessage("请输入管理密码")
+                .setView(input)
+                .setPositiveButton("下一步", (dialog, which) -> {
+                    if (SERVER_EDIT_PASSWORD.equals(input.getText().toString())) {
+                        showServerUrlDialog();
+                    } else {
+                        showTemporaryOverlay("密码错误");
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showServerUrlDialog() {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(getServerUrl());
+        input.setSelection(input.getText().length());
+        new AlertDialog.Builder(this)
+                .setTitle("服务器地址")
+                .setMessage("例如 http://n.dujiaoxian.online:35039")
+                .setView(input)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    String value = input.getText().toString().trim();
+                    if (!value.matches("(?i)^https?://.+")) {
+                        showTemporaryOverlay("地址必须以 http:// 或 https:// 开头");
+                        return;
+                    }
+                    saveServerUrl(value);
+                    showTemporaryOverlay("服务器地址已保存");
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -312,7 +368,7 @@ public class MainActivity extends Activity {
     private void loadVideos() {
         new Thread(() -> {
             try {
-                List<VideoItem> result = fetchVideos(SERVER_URL);
+                List<VideoItem> result = fetchVideos(getServerUrl());
                 Collections.sort(result, (a, b) -> b.createdAt.compareTo(a.createdAt));
                 runOnUiThread(() -> {
                     allVideos.clear();
@@ -427,7 +483,7 @@ public class MainActivity extends Activity {
                     JSONObject body = new JSONObject();
                     body.put("webViewUrl", currentUrl);
                     body.put("payload", new JSONArray("[" + value + "]").get(0));
-                    postJson(SERVER_URL + "/debug/dom", body);
+                    postJson(getServerUrl() + "/debug/dom", body);
                 } catch (Exception ignored) {
                 }
             }).start();
@@ -463,7 +519,7 @@ public class MainActivity extends Activity {
             try {
                 String link = extractSupportedUrl(sharedText);
                 if (link == null) throw new Exception("没有找到支持的视频链接");
-                pushLink(SERVER_URL, link);
+                pushLink(getServerUrl(), link);
                 if (fromClipboard) saveLastPushedClipboardUrl(link);
                 result = "推送成功\n" + link;
             } catch (Exception e) {
