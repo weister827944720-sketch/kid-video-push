@@ -60,6 +60,7 @@ public class MainActivity extends Activity {
     private int currentIndex = 0;
     private String lastDebugUrl = "";
     private int currentTab = TAB_AGGREGATE;
+    private boolean playerModeReady = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -141,8 +142,25 @@ public class MainActivity extends Activity {
         });
 
         setContentView(root);
+        playerModeReady = true;
         showOverlay("正在加载推荐视频...");
         loadVideos();
+        watchClipboardForNewLink();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (playerModeReady) {
+            webView.postDelayed(this::watchClipboardForNewLink, 300);
+        }
+    }
+
+    private void watchClipboardForNewLink() {
+        String clipboardText = readClipboardText();
+        String clipboardUrl = extractSupportedUrl(clipboardText);
+        if (clipboardUrl == null || clipboardUrl.equals(getLastPushedClipboardUrl())) return;
+        showPushMode(clipboardText, true);
     }
 
     private TextView createTab(String text, int tab) {
@@ -208,13 +226,13 @@ public class MainActivity extends Activity {
         overlay.setVisibility(View.GONE);
         if (tab == TAB_AGGREGATE) {
             showOverlay("正在加载聚合视频...");
-            applyCurrentFilter();
+            loadVideos();
         } else if (tab == TAB_DOUYIN) {
             showOverlay("正在加载抖音视频...");
-            applyCurrentFilter();
+            loadVideos();
         } else if (tab == TAB_BILIBILI) {
             showOverlay("正在加载哔哩哔哩视频...");
-            applyCurrentFilter();
+            loadVideos();
         } else {
             loadMinePage();
         }
@@ -412,9 +430,10 @@ public class MainActivity extends Activity {
             "  function hideNoise(){\n" +
             "    const css = `\n" +
             "      html, body, #root, .container, .video-container { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; pointer-events:auto!important; }\n" +
-            "      .video-container, .horizontal-video { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
-            "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
-            "      .footer { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:56px!important; z-index:3!important; pointer-events:none!important; color:#fff!important; }\n" +
+            "      .video-container, .horizontal-video { position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:56px!important; width:100vw!important; height:calc(100vh - 56px)!important; z-index:1!important; }\n" +
+            "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:calc(100vh - 56px)!important; object-fit:contain!important; position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:56px!important; z-index:2!important; background:#000!important; }\n" +
+            "      .footer { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:88px!important; z-index:3!important; pointer-events:none!important; color:#fff!important; }\n" +
+            "      .progress_small-wrapper { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:56px!important; z-index:4!important; pointer-events:auto!important; }\n" +
             "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .video-msg-container, .bottom-btn-con-new, .right-con,\n" +
             "      .end-page-info, .end-page-info__container, .end-page-info__waterfall, .end-page-info-button,\n" +
             "      .arco-masking, .arco-popup, .commentBoard_8924a, .commentBoardTopBanner_8924a, .commentList_8924a,\n" +
@@ -442,7 +461,7 @@ public class MainActivity extends Activity {
             "    const video=document.querySelector('video');\n" +
             "    if(video){\n" +
             "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
-            "      video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important';\n" +
+            "      video.style.cssText='width:100vw!important;height:calc(100vh - 56px)!important;object-fit:contain!important;position:fixed!important;left:0!important;right:0!important;top:0!important;bottom:56px!important;z-index:1!important;background:#000!important';\n" +
             "      video.preload='auto'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
             "    }\n" +
             "  }\n" +
@@ -455,8 +474,9 @@ public class MainActivity extends Activity {
             "  function cleanBili(){\n" +
             "    const css = `\n" +
             "      html, body, #app, .m-video, .m-video-normal, .video-share, .m-video-player, .player-container, #bilibiliPlayer, .gsl-wrap, .gsl-area { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; }\n" +
-            "      #bilibiliPlayer, .m-video-player, .player-container, .gsl-wrap, .gsl-area { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
-            "      video, .gsl-video { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:1!important; background:#000!important; }\n" +
+            "      #bilibiliPlayer, .m-video-player, .player-container, .gsl-wrap, .gsl-area { position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:56px!important; width:100vw!important; height:calc(100vh - 56px)!important; z-index:1!important; }\n" +
+            "      video, .gsl-video { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:calc(100vh - 56px)!important; object-fit:contain!important; position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:56px!important; z-index:1!important; background:#000!important; }\n" +
+            "      .gsl-control { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:56px!important; z-index:5!important; pointer-events:auto!important; }\n" +
             "      [class*=\"dm\"], [class*=\"danmaku\"] { visibility:visible!important; opacity:1!important; z-index:4!important; pointer-events:none!important; }\n" +
             "      .gsl-play-mask, .gsl-play-mask-icon, .icon-preview, .m-navbar, .right, .open-app-img, m-open-app, .gsl-buffer, .gsl-buffer-app, .gsl-poster, .gsl-poster-tips, .openapp-btn, .video-natural-search, .fixed-wrapper, .m-video-related, .list-view-wrap-v2, .openapp-dialog, .openapp-mask, .m-related-openapp, .gsl-callapp-dom, .bili-dialog-m, .launch-app-btn { display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; width:0!important; height:0!important; }\n" +
             "    `;\n" +
@@ -466,7 +486,7 @@ public class MainActivity extends Activity {
             "    document.querySelectorAll('#app,.m-video,.m-video-normal,.video-share,.m-video-player,.player-container,#bilibiliPlayer,.gsl-wrap,.gsl-area').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
             "    document.querySelectorAll('.gsl-play-mask,.gsl-play-mask-icon,.icon-preview,.m-navbar,.right,.open-app-img,m-open-app,.gsl-buffer,.gsl-buffer-app,.gsl-poster,.gsl-poster-tips,.openapp-btn,.video-natural-search,.fixed-wrapper,.m-video-related,.list-view-wrap-v2,.openapp-dialog,.openapp-mask,.m-related-openapp,.gsl-callapp-dom').forEach(function(el){ el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('pointer-events','none','important'); });\n" +
             "    const video=document.querySelector('video');\n" +
-            "    if(video){ video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true; video.preload='auto'; video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); } }\n" +
+            "    if(video){ video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true; video.preload='auto'; video.style.cssText='width:100vw!important;height:calc(100vh - 56px)!important;object-fit:contain!important;position:fixed!important;left:0!important;right:0!important;top:0!important;bottom:56px!important;z-index:1!important;background:#000!important'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); } }\n" +
             "  }\n" +
             "  cleanBili();\n" +
             "  setInterval(cleanBili, 1200);\n" +
