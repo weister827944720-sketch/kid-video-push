@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
     private final List<VideoItem> videos = new ArrayList<>();
     private FrameLayout root;
     private WebView webView;
+    private LinearLayout minePanel;
     private TextView overlay;
     private TextView aggregateTab;
     private TextView douyinTab;
@@ -107,6 +108,10 @@ public class MainActivity extends Activity {
 
         webView = createWebView();
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
+
+        minePanel = createMinePanel();
+        minePanel.setVisibility(View.GONE);
+        root.addView(minePanel, new FrameLayout.LayoutParams(-1, -1));
 
         overlay = new TextView(this);
         overlay.setTextColor(Color.WHITE);
@@ -178,6 +183,54 @@ public class MainActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
+    private LinearLayout createMinePanel() {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setGravity(Gravity.CENTER);
+        panel.setPadding(dp(28), dp(28), dp(28), dp(76));
+        panel.setBackgroundColor(Color.rgb(9, 9, 9));
+
+        TextView title = new TextView(this);
+        title.setText("我的账号");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(28);
+        title.setGravity(Gravity.CENTER);
+        panel.addView(title, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("登录后 WebView 会保存 Cookie。B 站登录后播放清晰度会更稳定。");
+        subtitle.setTextColor(0xCCFFFFFF);
+        subtitle.setTextSize(16);
+        subtitle.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(-1, -2);
+        subtitleParams.setMargins(0, dp(12), 0, dp(18));
+        panel.addView(subtitle, subtitleParams);
+
+        panel.addView(createMineButton("哔哩哔哩登录 / 扫码", 0xFF102233, () -> openMineUrl("https://passport.bilibili.com/login")));
+        panel.addView(createMineButton("管理/删除视频连接", 0xFF2A1D12, () -> openMineUrl(SERVER_URL + "/admin")));
+        return panel;
+    }
+
+    private TextView createMineButton(String text, int color, Runnable action) {
+        TextView button = new TextView(this);
+        button.setText(text);
+        button.setTextColor(Color.WHITE);
+        button.setTextSize(18);
+        button.setGravity(Gravity.CENTER);
+        button.setBackgroundColor(color);
+        button.setOnClickListener(v -> action.run());
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(54));
+        params.setMargins(0, dp(10), 0, 0);
+        button.setLayoutParams(params);
+        return button;
+    }
+
+    private void openMineUrl(String url) {
+        minePanel.setVisibility(View.GONE);
+        webView.setVisibility(View.VISIBLE);
+        webView.loadUrl(url);
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private WebView createWebView() {
         WebView view = new WebView(this);
@@ -225,12 +278,18 @@ public class MainActivity extends Activity {
         updateTabs();
         overlay.setVisibility(View.GONE);
         if (tab == TAB_AGGREGATE) {
+            minePanel.setVisibility(View.GONE);
+            webView.setVisibility(View.VISIBLE);
             showOverlay("正在加载聚合视频...");
             loadVideos();
         } else if (tab == TAB_DOUYIN) {
+            minePanel.setVisibility(View.GONE);
+            webView.setVisibility(View.VISIBLE);
             showOverlay("正在加载抖音视频...");
             loadVideos();
         } else if (tab == TAB_BILIBILI) {
+            minePanel.setVisibility(View.GONE);
+            webView.setVisibility(View.VISIBLE);
             showOverlay("正在加载哔哩哔哩视频...");
             loadVideos();
         } else {
@@ -239,13 +298,8 @@ public class MainActivity extends Activity {
     }
 
     private void loadMinePage() {
-        String html = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
-                "<style>body{margin:0;background:#090909;color:#fff;font-family:sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}.box{width:86%;max-width:520px}.title{font-size:28px;font-weight:700;margin-bottom:12px}.sub{opacity:.72;margin-bottom:28px;line-height:1.6}.btn{display:block;text-decoration:none;color:#fff;background:#222;border:1px solid #444;border-radius:14px;padding:18px 20px;margin:14px 0;font-size:18px}.bili{background:#102233;border-color:#00a1d6}.admin{background:#2a1d12;border-color:#d58b31}</style>" +
-                "</head><body><div class='box'><div class='title'>我的账号</div><div class='sub'>登录后 WebView 会保存 Cookie。B 站登录后播放清晰度会更稳定。</div>" +
-                "<a class='btn bili' href='https://passport.bilibili.com/login'>哔哩哔哩登录 / 扫码</a>" +
-                "<a class='btn admin' href='" + SERVER_URL + "/admin'>管理/删除视频连接</a>" +
-                "</div></body></html>";
-        webView.loadDataWithBaseURL("https://local.mine/", html, "text/html", "UTF-8", null);
+        webView.setVisibility(View.GONE);
+        minePanel.setVisibility(View.VISIBLE);
     }
 
     private void updateTabs() {
@@ -430,10 +484,10 @@ public class MainActivity extends Activity {
             "  function hideNoise(){\n" +
             "    const css = `\n" +
             "      html, body, #root, .container, .video-container { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; pointer-events:auto!important; }\n" +
-            "      .video-container, .horizontal-video { position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:56px!important; width:100vw!important; height:calc(100vh - 56px)!important; z-index:1!important; }\n" +
-            "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:calc(100vh - 56px)!important; object-fit:contain!important; position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:56px!important; z-index:2!important; background:#000!important; }\n" +
-            "      .footer { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:88px!important; z-index:3!important; pointer-events:none!important; color:#fff!important; }\n" +
-            "      .progress_small-wrapper { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:56px!important; z-index:4!important; pointer-events:auto!important; }\n" +
+            "      .video-container, .horizontal-video { position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:96px!important; width:100vw!important; height:calc(100vh - 96px)!important; z-index:1!important; }\n" +
+            "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:calc(100vh - 96px)!important; object-fit:contain!important; position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:96px!important; z-index:2!important; background:#000!important; }\n" +
+            "      .footer { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:128px!important; z-index:3!important; pointer-events:none!important; color:#fff!important; }\n" +
+            "      .progress_small-wrapper { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:96px!important; z-index:4!important; pointer-events:auto!important; }\n" +
             "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .video-msg-container, .bottom-btn-con-new, .right-con,\n" +
             "      .end-page-info, .end-page-info__container, .end-page-info__waterfall, .end-page-info-button,\n" +
             "      .arco-masking, .arco-popup, .commentBoard_8924a, .commentBoardTopBanner_8924a, .commentList_8924a,\n" +
@@ -461,7 +515,7 @@ public class MainActivity extends Activity {
             "    const video=document.querySelector('video');\n" +
             "    if(video){\n" +
             "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
-            "      video.style.cssText='width:100vw!important;height:calc(100vh - 56px)!important;object-fit:contain!important;position:fixed!important;left:0!important;right:0!important;top:0!important;bottom:56px!important;z-index:1!important;background:#000!important';\n" +
+            "      video.style.cssText='width:100vw!important;height:calc(100vh - 96px)!important;object-fit:contain!important;position:fixed!important;left:0!important;right:0!important;top:0!important;bottom:96px!important;z-index:1!important;background:#000!important';\n" +
             "      video.preload='auto'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
             "    }\n" +
             "  }\n" +
@@ -474,9 +528,9 @@ public class MainActivity extends Activity {
             "  function cleanBili(){\n" +
             "    const css = `\n" +
             "      html, body, #app, .m-video, .m-video-normal, .video-share, .m-video-player, .player-container, #bilibiliPlayer, .gsl-wrap, .gsl-area { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; }\n" +
-            "      #bilibiliPlayer, .m-video-player, .player-container, .gsl-wrap, .gsl-area { position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:56px!important; width:100vw!important; height:calc(100vh - 56px)!important; z-index:1!important; }\n" +
-            "      video, .gsl-video { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:calc(100vh - 56px)!important; object-fit:contain!important; position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:56px!important; z-index:1!important; background:#000!important; }\n" +
-            "      .gsl-control { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:56px!important; z-index:5!important; pointer-events:auto!important; }\n" +
+            "      #bilibiliPlayer, .m-video-player, .player-container, .gsl-wrap, .gsl-area { position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:96px!important; width:100vw!important; height:calc(100vh - 96px)!important; z-index:1!important; }\n" +
+            "      video, .gsl-video { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:calc(100vh - 96px)!important; object-fit:contain!important; position:fixed!important; left:0!important; right:0!important; top:0!important; bottom:96px!important; z-index:1!important; background:#000!important; }\n" +
+            "      .gsl-control { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:96px!important; z-index:5!important; pointer-events:auto!important; }\n" +
             "      [class*=\"dm\"], [class*=\"danmaku\"] { visibility:visible!important; opacity:1!important; z-index:4!important; pointer-events:none!important; }\n" +
             "      .gsl-play-mask, .gsl-play-mask-icon, .icon-preview, .m-navbar, .right, .open-app-img, m-open-app, .gsl-buffer, .gsl-buffer-app, .gsl-poster, .gsl-poster-tips, .openapp-btn, .video-natural-search, .fixed-wrapper, .m-video-related, .list-view-wrap-v2, .openapp-dialog, .openapp-mask, .m-related-openapp, .gsl-callapp-dom, .bili-dialog-m, .launch-app-btn { display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; width:0!important; height:0!important; }\n" +
             "    `;\n" +
@@ -486,7 +540,7 @@ public class MainActivity extends Activity {
             "    document.querySelectorAll('#app,.m-video,.m-video-normal,.video-share,.m-video-player,.player-container,#bilibiliPlayer,.gsl-wrap,.gsl-area').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
             "    document.querySelectorAll('.gsl-play-mask,.gsl-play-mask-icon,.icon-preview,.m-navbar,.right,.open-app-img,m-open-app,.gsl-buffer,.gsl-buffer-app,.gsl-poster,.gsl-poster-tips,.openapp-btn,.video-natural-search,.fixed-wrapper,.m-video-related,.list-view-wrap-v2,.openapp-dialog,.openapp-mask,.m-related-openapp,.gsl-callapp-dom').forEach(function(el){ el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('pointer-events','none','important'); });\n" +
             "    const video=document.querySelector('video');\n" +
-            "    if(video){ video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true; video.preload='auto'; video.style.cssText='width:100vw!important;height:calc(100vh - 56px)!important;object-fit:contain!important;position:fixed!important;left:0!important;right:0!important;top:0!important;bottom:56px!important;z-index:1!important;background:#000!important'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); } }\n" +
+            "    if(video){ video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true; video.preload='auto'; video.style.cssText='width:100vw!important;height:calc(100vh - 96px)!important;object-fit:contain!important;position:fixed!important;left:0!important;right:0!important;top:0!important;bottom:96px!important;z-index:1!important;background:#000!important'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); } }\n" +
             "  }\n" +
             "  cleanBili();\n" +
             "  setInterval(cleanBili, 1200);\n" +
