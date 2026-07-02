@@ -104,7 +104,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String loadedUrl) {
                 injectCleaner();
-                webView.postDelayed(MainActivity.this::triggerPlay, 800);
+                webView.postDelayed(MainActivity.this::triggerPlay, 400);
             }
         });
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
@@ -188,7 +188,7 @@ public class MainActivity extends Activity {
                         "var v=document.querySelector('video');" +
                         "if(v){v.muted=false;v.controls=false;var p=v.play();if(p&&p.catch){p.catch(function(){});}}" +
                         "})()",
-                null), 300);
+                null), 100);
     }
 
     private void playNext() {
