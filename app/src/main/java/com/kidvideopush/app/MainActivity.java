@@ -167,7 +167,6 @@ public class MainActivity extends Activity {
         VideoItem item = videos.get(currentIndex);
         overlay.setVisibility(View.GONE);
         webView.loadUrl(item.shareUrl);
-        webView.postDelayed(this::triggerPlay, 1200);
     }
 
     private void triggerPlay() {
@@ -295,8 +294,7 @@ public class MainActivity extends Activity {
             "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .video-msg-container, .bottom-btn-con-new, .right-con,\n" +
             "      .end-page-info, .end-page-info__container, .end-page-info__waterfall, .end-page-info-button,\n" +
             "      .arco-masking, .arco-popup, .commentBoard_8924a, .commentBoardTopBanner_8924a, .commentList_8924a,\n" +
-            "      .video-card__like, .video-card__like__count, .video-card__cover__wrapper, .progress_small-wrapper,\n" +
-            "      [class*=\\\"play\\\"], [class*=\\\"Play\\\"], [class*=\\\"pause\\\"], [class*=\\\"Pause\\\"], [class*=\\\"player-icon\\\"],\n" +
+            "      .video-card__like, .video-card__like__count, .video-card__cover__wrapper,\n" +
             "      [href*=\\\"download\\\"], [href*=\\\"snssdk\\\"], [href*=\\\"open\\\"], [data-e2e*=\\\"like\\\"], [data-e2e*=\\\"comment\\\"] {\n" +
             "        display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; width:0!important; height:0!important;\n" +
             "      }\n" +
@@ -309,7 +307,7 @@ public class MainActivity extends Activity {
             "      const text=(el.innerText||el.textContent||'').trim();\n" +
             "      const cls=(el.className||'').toString();\n" +
             "      const href=(el.getAttribute&&el.getAttribute('href'))||'';\n" +
-            "      if(/打开抖音看精彩视频|打开App|去抖音|关注|点赞|评论|收藏|分享|登录|下载|播放/.test(text) || /open|download|login|follow|like|comment|favorite|share|play|pause|poster/i.test(cls+href)){\n" +
+            "      if(/打开抖音看精彩视频|打开App|去抖音|关注|点赞|评论|收藏|分享|登录|下载/.test(text) || /open|download|login|follow|like|comment|favorite|share/i.test(cls+href)){\n" +
             "        el.style.setProperty('display','none','important');\n" +
             "        el.style.setProperty('visibility','hidden','important');\n" +
             "        el.style.setProperty('pointer-events','none','important');\n" +
@@ -317,7 +315,6 @@ public class MainActivity extends Activity {
             "    });\n" +
             "    ['root'].forEach(function(id){ const el=document.getElementById(id); if(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); } });\n" +
             "    document.querySelectorAll('.container,.video-container,.horizontal-video').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
-            "    document.querySelectorAll('[class*=\\\"play\\\"],[class*=\\\"Play\\\"],[class*=\\\"pause\\\"],[class*=\\\"Pause\\\"],svg,canvas').forEach(function(el){ if(el.tagName==='VIDEO' || (el.className||'').toString().indexOf('poster')>=0) return; el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('opacity','0','important'); });\n" +
             "    const video=document.querySelector('video');\n" +
             "    if(video){\n" +
             "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
