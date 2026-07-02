@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
     private static final int TAB_BILIBILI = 2;
     private static final int TAB_MINE = 3;
 
+    private final List<VideoItem> allVideos = new ArrayList<>();
     private final List<VideoItem> videos = new ArrayList<>();
     private FrameLayout root;
     private WebView webView;
@@ -63,6 +64,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        hideSystemBars();
 
         if (Intent.ACTION_SEND.equals(getIntent().getAction())) {
             String text = getIntent().getStringExtra(Intent.EXTRA_TEXT);
@@ -76,6 +78,22 @@ public class MainActivity extends Activity {
         } else {
             showPlayerMode();
         }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) hideSystemBars();
+    }
+
+    private void hideSystemBars() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
     }
 
     private String readClipboardText() {
@@ -118,7 +136,7 @@ public class MainActivity extends Activity {
         gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                if (currentTab != TAB_AGGREGATE || e1 == null || e2 == null || videos.isEmpty()) return false;
+                if (currentTab == TAB_MINE || e1 == null || e2 == null || videos.isEmpty()) return false;
                 float diffY = e2.getY() - e1.getY();
                 if (Math.abs(diffY) > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
                     if (diffY < 0) playNext(); else playPrevious();
@@ -175,8 +193,11 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String loadedUrl) {
-                if (currentTab == TAB_AGGREGATE && isDouyinUrl(loadedUrl)) {
+                if (currentTab != TAB_MINE && isDouyinUrl(loadedUrl)) {
                     injectCleaner();
+                    webView.postDelayed(MainActivity.this::triggerPlay, 400);
+                } else if (currentTab != TAB_MINE && isBilibiliUrl(loadedUrl)) {
+                    injectBilibiliCleaner();
                     webView.postDelayed(MainActivity.this::triggerPlay, 400);
                 } else {
                     overlay.setVisibility(View.GONE);
@@ -193,11 +214,13 @@ public class MainActivity extends Activity {
         overlay.setVisibility(View.GONE);
         if (tab == TAB_AGGREGATE) {
             showOverlay("正在加载聚合视频...");
-            playCurrent();
+            applyCurrentFilter();
         } else if (tab == TAB_DOUYIN) {
-            webView.loadUrl("https://www.douyin.com/");
+            showOverlay("正在加载抖音视频...");
+            applyCurrentFilter();
         } else if (tab == TAB_BILIBILI) {
-            webView.loadUrl("https://www.bilibili.com/");
+            showOverlay("正在加载哔哩哔哩视频...");
+            applyCurrentFilter();
         } else {
             loadMinePage();
         }
@@ -205,9 +228,8 @@ public class MainActivity extends Activity {
 
     private void loadMinePage() {
         String html = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
-                "<style>body{margin:0;background:#090909;color:#fff;font-family:sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}.box{width:86%;max-width:520px}.title{font-size:28px;font-weight:700;margin-bottom:12px}.sub{opacity:.72;margin-bottom:28px;line-height:1.6}.btn{display:block;text-decoration:none;color:#fff;background:#222;border:1px solid #444;border-radius:14px;padding:18px 20px;margin:14px 0;font-size:18px}.douyin{background:#20101b;border-color:#ff1858}.bili{background:#102233;border-color:#00a1d6}</style>" +
-                "</head><body><div class='box'><div class='title'>我的账号</div><div class='sub'>登录后 WebView 会保存 Cookie。B 站登录后播放清晰度会更稳定；抖音也可以在这里扫码登录。</div>" +
-                "<a class='btn douyin' href='https://www.douyin.com/'>抖音登录 / 扫码</a>" +
+                "<style>body{margin:0;background:#090909;color:#fff;font-family:sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}.box{width:86%;max-width:520px}.title{font-size:28px;font-weight:700;margin-bottom:12px}.sub{opacity:.72;margin-bottom:28px;line-height:1.6}.btn{display:block;text-decoration:none;color:#fff;background:#222;border:1px solid #444;border-radius:14px;padding:18px 20px;margin:14px 0;font-size:18px}.bili{background:#102233;border-color:#00a1d6}</style>" +
+                "</head><body><div class='box'><div class='title'>我的账号</div><div class='sub'>登录后 WebView 会保存 Cookie。B 站登录后播放清晰度会更稳定。</div>" +
                 "<a class='btn bili' href='https://passport.bilibili.com/login'>哔哩哔哩登录 / 扫码</a>" +
                 "</div></body></html>";
         webView.loadDataWithBaseURL("https://local.mine/", html, "text/html", "UTF-8", null);
@@ -226,19 +248,29 @@ public class MainActivity extends Activity {
                 List<VideoItem> result = fetchVideos(SERVER_URL);
                 Collections.sort(result, (a, b) -> b.createdAt.compareTo(a.createdAt));
                 runOnUiThread(() -> {
-                    videos.clear();
-                    videos.addAll(result);
-                    if (videos.isEmpty()) {
-                        showOverlay("还没有推送视频\n复制抖音分享文字后打开本 App\n或访问后台网页粘贴推送");
-                    } else {
-                        currentIndex = 0;
-                        playCurrent();
-                    }
+                    allVideos.clear();
+                    allVideos.addAll(result);
+                    applyCurrentFilter();
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> showOverlay("加载失败\n" + e.getMessage()));
             }
         }).start();
+    }
+
+    private void applyCurrentFilter() {
+        videos.clear();
+        for (VideoItem item : allVideos) {
+            if (currentTab == TAB_AGGREGATE || (currentTab == TAB_DOUYIN && isDouyinUrl(item.shareUrl)) || (currentTab == TAB_BILIBILI && isBilibiliUrl(item.shareUrl))) {
+                videos.add(item);
+            }
+        }
+        currentIndex = 0;
+        if (videos.isEmpty()) {
+            showOverlay(currentTab == TAB_BILIBILI ? "还没有哔哩哔哩视频" : currentTab == TAB_DOUYIN ? "还没有抖音视频" : "还没有推送视频");
+        } else {
+            playCurrent();
+        }
     }
 
     private void playCurrent() {
@@ -305,6 +337,17 @@ public class MainActivity extends Activity {
         webView.postDelayed(this::captureDomDebug, 2500);
     }
 
+    private void injectBilibiliCleaner() {
+        webView.evaluateJavascript(HIDE_BILIBILI_DISTRACTIONS_JS, null);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_BILIBILI_DISTRACTIONS_JS, null), 80);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_BILIBILI_DISTRACTIONS_JS, null), 250);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_BILIBILI_DISTRACTIONS_JS, null), 500);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_BILIBILI_DISTRACTIONS_JS, null), 900);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_BILIBILI_DISTRACTIONS_JS, null), 1500);
+        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_BILIBILI_DISTRACTIONS_JS, null), 2500);
+        webView.postDelayed(this::captureDomDebug, 2500);
+    }
+
     private void captureDomDebug() {
         if (webView == null) return;
         String currentUrl = webView.getUrl() == null ? "" : webView.getUrl();
@@ -344,7 +387,7 @@ public class MainActivity extends Activity {
         text.setTextColor(Color.WHITE);
         text.setTextSize(18);
         text.setGravity(Gravity.CENTER);
-        text.setText("检测到抖音链接\n正在推送给平板...");
+        text.setText("检测到视频链接\n正在推送给平板...");
         frame.addView(text, new FrameLayout.LayoutParams(-1, -1));
         setContentView(frame);
 
@@ -375,7 +418,7 @@ public class MainActivity extends Activity {
             "      html, body, #root, .container, .video-container { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; pointer-events:auto!important; }\n" +
             "      .video-container, .horizontal-video { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
             "      video, #video-player { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
-            "      .footer { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:0!important; z-index:3!important; pointer-events:none!important; color:#fff!important; }\n" +
+            "      .footer { display:block!important; visibility:visible!important; opacity:1!important; position:fixed!important; left:0!important; right:0!important; bottom:56px!important; z-index:3!important; pointer-events:none!important; color:#fff!important; }\n" +
             "      .adapt-login-header, .login-header-left, .btn-wrap, .banner-bg, .video-msg-container, .bottom-btn-con-new, .right-con,\n" +
             "      .end-page-info, .end-page-info__container, .end-page-info__waterfall, .end-page-info-button,\n" +
             "      .arco-masking, .arco-popup, .commentBoard_8924a, .commentBoardTopBanner_8924a, .commentList_8924a,\n" +
@@ -409,6 +452,27 @@ public class MainActivity extends Activity {
             "  }\n" +
             "  hideNoise();\n" +
             "  setInterval(hideNoise, 1200);\n" +
+            "})();";
+
+    private static final String HIDE_BILIBILI_DISTRACTIONS_JS =
+            "(function() {\n" +
+            "  function cleanBili(){\n" +
+            "    const css = `\n" +
+            "      html, body, #app, .m-video, .m-video-normal, .video-share, .m-video-player, .player-container, #bilibiliPlayer, .gsl-wrap, .gsl-area { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; }\n" +
+            "      #bilibiliPlayer, .m-video-player, .player-container, .gsl-wrap, .gsl-area { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
+            "      video, .gsl-video { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
+            "      .m-navbar, .right, .open-app-img, m-open-app, .gsl-buffer, .gsl-buffer-app, .gsl-poster, .gsl-poster-tips, .gsl-control, .gsl-sendbar, .openapp-btn, .video-natural-search, .fixed-wrapper, .m-video-related, .list-view-wrap-v2, .openapp-dialog, .openapp-mask, .m-related-openapp, .gsl-callapp-dom, .bili-dialog-m, .launch-app-btn { display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; width:0!important; height:0!important; }\n" +
+            "    `;\n" +
+            "    let style=document.getElementById('kid-bili-clean-style');\n" +
+            "    if(!style){ style=document.createElement('style'); style.id='kid-bili-clean-style'; document.head.appendChild(style); }\n" +
+            "    style.textContent=css;\n" +
+            "    document.querySelectorAll('#app,.m-video,.m-video-normal,.video-share,.m-video-player,.player-container,#bilibiliPlayer,.gsl-wrap,.gsl-area').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
+            "    document.querySelectorAll('.m-navbar,.right,.open-app-img,m-open-app,.gsl-buffer,.gsl-buffer-app,.gsl-poster,.gsl-poster-tips,.gsl-control,.gsl-sendbar,.openapp-btn,.video-natural-search,.fixed-wrapper,.m-video-related,.list-view-wrap-v2,.openapp-dialog,.openapp-mask,.m-related-openapp,.gsl-callapp-dom').forEach(function(el){ el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('pointer-events','none','important'); });\n" +
+            "    const video=document.querySelector('video');\n" +
+            "    if(video){ video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true; video.preload='auto'; video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:2!important;background:#000!important'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); } }\n" +
+            "  }\n" +
+            "  cleanBili();\n" +
+            "  setInterval(cleanBili, 1200);\n" +
             "})();";
 
     private static final String DOM_DEBUG_JS =
@@ -507,6 +571,12 @@ public class MainActivity extends Activity {
 
     private static boolean isDouyinUrl(String url) {
         return url != null && url.toLowerCase().contains("douyin.com");
+    }
+
+    private static boolean isBilibiliUrl(String url) {
+        if (url == null) return false;
+        String value = url.toLowerCase();
+        return value.contains("bilibili.com") || value.contains("b23.tv");
     }
 
     private static class VideoItem {
