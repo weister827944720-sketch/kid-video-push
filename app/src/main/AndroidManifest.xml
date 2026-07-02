@@ -3,7 +3,8 @@
 
     <application
         android:allowBackup="false"
-        android:label="孩子视频推送"
+        android:icon="@drawable/ic_launcher"
+        android:label="聚合抖音"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true">
         <activity

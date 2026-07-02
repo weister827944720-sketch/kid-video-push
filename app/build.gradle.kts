@@ -10,8 +10,8 @@ android {
         applicationId = "com.kidvideopush.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 19
-        versionName = "0.1.19"
+        versionCode = 20
+        versionName = "0.1.20"
     }
 
     compileOptions {

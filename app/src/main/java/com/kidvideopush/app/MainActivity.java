@@ -18,6 +18,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import org.json.JSONArray;
@@ -39,14 +40,23 @@ public class MainActivity extends Activity {
     private static final String SERVER_URL = "http://n.dujiaoxian.online:35039";
     private static final int SWIPE_THRESHOLD = 120;
     private static final int SWIPE_VELOCITY_THRESHOLD = 120;
+    private static final int TAB_AGGREGATE = 0;
+    private static final int TAB_DOUYIN = 1;
+    private static final int TAB_BILIBILI = 2;
+    private static final int TAB_MINE = 3;
 
     private final List<VideoItem> videos = new ArrayList<>();
     private FrameLayout root;
     private WebView webView;
     private TextView overlay;
+    private TextView aggregateTab;
+    private TextView douyinTab;
+    private TextView bilibiliTab;
+    private TextView mineTab;
     private GestureDetector gestureDetector;
     private int currentIndex = 0;
     private String lastDebugUrl = "";
+    private int currentTab = TAB_AGGREGATE;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,7 +71,7 @@ public class MainActivity extends Activity {
         }
 
         String clipboardText = readClipboardText();
-        if (extractDouyinUrl(clipboardText) != null) {
+        if (extractSupportedUrl(clipboardText) != null) {
             showPushMode(clipboardText);
         } else {
             showPlayerMode();
@@ -92,10 +102,23 @@ public class MainActivity extends Activity {
         overlay.setBackgroundColor(Color.TRANSPARENT);
         root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
 
+        LinearLayout tabs = new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        tabs.setBackgroundColor(0x99000000);
+        aggregateTab = createTab("聚合", TAB_AGGREGATE);
+        douyinTab = createTab("抖音", TAB_DOUYIN);
+        bilibiliTab = createTab("哔哩哔哩", TAB_BILIBILI);
+        mineTab = createTab("我的", TAB_MINE);
+        tabs.addView(aggregateTab, new LinearLayout.LayoutParams(0, dp(48), 1));
+        tabs.addView(douyinTab, new LinearLayout.LayoutParams(0, dp(48), 1));
+        tabs.addView(bilibiliTab, new LinearLayout.LayoutParams(0, dp(48), 1));
+        tabs.addView(mineTab, new LinearLayout.LayoutParams(0, dp(48), 1));
+        root.addView(tabs, new FrameLayout.LayoutParams(-1, dp(48), Gravity.BOTTOM));
+
         gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                if (e1 == null || e2 == null || videos.isEmpty()) return false;
+                if (currentTab != TAB_AGGREGATE || e1 == null || e2 == null || videos.isEmpty()) return false;
                 float diffY = e2.getY() - e1.getY();
                 if (Math.abs(diffY) > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
                     if (diffY < 0) playNext(); else playPrevious();
@@ -108,6 +131,21 @@ public class MainActivity extends Activity {
         setContentView(root);
         showOverlay("正在加载推荐视频...");
         loadVideos();
+    }
+
+    private TextView createTab(String text, int tab) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setGravity(Gravity.CENTER);
+        view.setTextSize(14);
+        view.setTextColor(Color.WHITE);
+        view.setBackgroundColor(tab == currentTab ? 0xAA333333 : 0x66000000);
+        view.setOnClickListener(v -> switchTab(tab));
+        return view;
+    }
+
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -137,11 +175,49 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String loadedUrl) {
-                injectCleaner();
-                webView.postDelayed(MainActivity.this::triggerPlay, 400);
+                if (currentTab == TAB_AGGREGATE && isDouyinUrl(loadedUrl)) {
+                    injectCleaner();
+                    webView.postDelayed(MainActivity.this::triggerPlay, 400);
+                } else {
+                    overlay.setVisibility(View.GONE);
+                }
             }
         });
         return view;
+    }
+
+    private void switchTab(int tab) {
+        if (currentTab == tab) return;
+        currentTab = tab;
+        updateTabs();
+        overlay.setVisibility(View.GONE);
+        if (tab == TAB_AGGREGATE) {
+            showOverlay("正在加载聚合视频...");
+            playCurrent();
+        } else if (tab == TAB_DOUYIN) {
+            webView.loadUrl("https://www.douyin.com/");
+        } else if (tab == TAB_BILIBILI) {
+            webView.loadUrl("https://www.bilibili.com/");
+        } else {
+            loadMinePage();
+        }
+    }
+
+    private void loadMinePage() {
+        String html = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
+                "<style>body{margin:0;background:#090909;color:#fff;font-family:sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}.box{width:86%;max-width:520px}.title{font-size:28px;font-weight:700;margin-bottom:12px}.sub{opacity:.72;margin-bottom:28px;line-height:1.6}.btn{display:block;text-decoration:none;color:#fff;background:#222;border:1px solid #444;border-radius:14px;padding:18px 20px;margin:14px 0;font-size:18px}.douyin{background:#20101b;border-color:#ff1858}.bili{background:#102233;border-color:#00a1d6}</style>" +
+                "</head><body><div class='box'><div class='title'>我的账号</div><div class='sub'>登录后 WebView 会保存 Cookie。B 站登录后播放清晰度会更稳定；抖音也可以在这里扫码登录。</div>" +
+                "<a class='btn douyin' href='https://www.douyin.com/'>抖音登录 / 扫码</a>" +
+                "<a class='btn bili' href='https://passport.bilibili.com/login'>哔哩哔哩登录 / 扫码</a>" +
+                "</div></body></html>";
+        webView.loadDataWithBaseURL("https://local.mine/", html, "text/html", "UTF-8", null);
+    }
+
+    private void updateTabs() {
+        aggregateTab.setBackgroundColor(currentTab == TAB_AGGREGATE ? 0xAA333333 : 0x66000000);
+        douyinTab.setBackgroundColor(currentTab == TAB_DOUYIN ? 0xAA333333 : 0x66000000);
+        bilibiliTab.setBackgroundColor(currentTab == TAB_BILIBILI ? 0xAA333333 : 0x66000000);
+        mineTab.setBackgroundColor(currentTab == TAB_MINE ? 0xAA333333 : 0x66000000);
     }
 
     private void loadVideos() {
@@ -275,8 +351,8 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             String result;
             try {
-                String link = extractDouyinUrl(sharedText);
-                if (link == null) throw new Exception("没有找到抖音链接");
+                String link = extractSupportedUrl(sharedText);
+                if (link == null) throw new Exception("没有找到支持的视频链接");
                 pushLink(SERVER_URL, link);
                 result = "已推送到平板\n" + link;
             } catch (Exception e) {
@@ -394,7 +470,7 @@ public class MainActivity extends Activity {
         for (int i = 0; i < array.length(); i++) {
             JSONObject obj = array.getJSONObject(i);
             String shareUrl = obj.optString("shareUrl");
-            if (extractDouyinUrl(shareUrl) != null) {
+            if (extractSupportedUrl(shareUrl) != null) {
                 items.add(new VideoItem(shareUrl, obj.optString("createdAt")));
             }
         }
@@ -412,6 +488,25 @@ public class MainActivity extends Activity {
         Matcher anyMatcher = Pattern.compile("https?://[^\\s，,。]*douyin\\.com/[^\\s，,。]*", Pattern.CASE_INSENSITIVE).matcher(text);
         if (anyMatcher.find()) return anyMatcher.group().replaceAll("[，,。\\s]+$", "");
         return null;
+    }
+
+    private static String extractBilibiliUrl(String text) {
+        if (text == null) return null;
+        Matcher matcher = Pattern.compile("https?://(?:www\\.|m\\.)?bilibili\\.com/[^\\s，,。]+", Pattern.CASE_INSENSITIVE).matcher(text);
+        if (matcher.find()) return matcher.group().replaceAll("[，,。\\s]+$", "");
+        Matcher shortMatcher = Pattern.compile("https?://b23\\.tv/[^\\s，,。]+", Pattern.CASE_INSENSITIVE).matcher(text);
+        if (shortMatcher.find()) return shortMatcher.group().replaceAll("[，,。\\s]+$", "");
+        return null;
+    }
+
+    private static String extractSupportedUrl(String text) {
+        String douyin = extractDouyinUrl(text);
+        if (douyin != null) return douyin;
+        return extractBilibiliUrl(text);
+    }
+
+    private static boolean isDouyinUrl(String url) {
+        return url != null && url.toLowerCase().contains("douyin.com");
     }
 
     private static class VideoItem {
