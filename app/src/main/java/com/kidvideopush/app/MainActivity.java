@@ -104,6 +104,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String loadedUrl) {
                 injectCleaner();
+                webView.postDelayed(MainActivity.this::triggerPlay, 800);
             }
         });
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
@@ -166,6 +167,29 @@ public class MainActivity extends Activity {
         VideoItem item = videos.get(currentIndex);
         overlay.setVisibility(View.GONE);
         webView.loadUrl(item.shareUrl);
+        webView.postDelayed(this::triggerPlay, 1200);
+    }
+
+    private void triggerPlay() {
+        if (webView == null || webView.getWidth() == 0 || webView.getHeight() == 0) return;
+
+        float cx = webView.getWidth() / 2f;
+        float cy = webView.getHeight() / 2f;
+        long now = android.os.SystemClock.uptimeMillis();
+
+        MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, cx, cy, 0);
+        MotionEvent up = MotionEvent.obtain(now, now + 100, MotionEvent.ACTION_UP, cx, cy, 0);
+        webView.dispatchTouchEvent(down);
+        webView.dispatchTouchEvent(up);
+        down.recycle();
+        up.recycle();
+
+        webView.postDelayed(() -> webView.evaluateJavascript(
+                "(function(){" +
+                        "var v=document.querySelector('video');" +
+                        "if(v){v.muted=false;v.controls=false;var p=v.play();if(p&&p.catch){p.catch(function(){});}}" +
+                        "})()",
+                null), 300);
     }
 
     private void playNext() {
