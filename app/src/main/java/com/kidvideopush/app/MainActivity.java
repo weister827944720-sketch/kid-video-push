@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
     private static final String SERVER_URL = "http://n.dujiaoxian.online:35039";
     private static final int SWIPE_THRESHOLD = 120;
     private static final int SWIPE_VELOCITY_THRESHOLD = 120;
+    private static final int PRELOAD_WEBVIEW_COUNT = 2;
 
     private final List<VideoItem> videos = new ArrayList<>();
     private FrameLayout root;
@@ -192,15 +193,14 @@ public class MainActivity extends Activity {
             webView.setVisibility(View.INVISIBLE);
             showPreloadedCurrent(true);
         } else {
-            hidePreloadViews();
-            for (WebView view : preloadWebViews) pauseWebView(view);
+            destroyPreloadViews();
             webView.setVisibility(View.VISIBLE);
             playCurrent();
         }
     }
 
     private void ensurePreloadViews() {
-        for (int i = 0; i < preloadWebViews.length; i++) {
+        for (int i = 0; i < PRELOAD_WEBVIEW_COUNT; i++) {
             if (preloadWebViews[i] == null) {
                 WebView view = createWebView(true);
                 view.setVisibility(View.INVISIBLE);
@@ -210,9 +210,18 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void hidePreloadViews() {
-        for (WebView view : preloadWebViews) {
-            if (view != null) view.setVisibility(View.INVISIBLE);
+    private void destroyPreloadViews() {
+        for (int i = 0; i < preloadWebViews.length; i++) {
+            WebView view = preloadWebViews[i];
+            if (view != null) {
+                pauseWebView(view);
+                view.stopLoading();
+                view.loadUrl("about:blank");
+                root.removeView(view);
+                view.destroy();
+                preloadWebViews[i] = null;
+            }
+            preloadIndexes[i] = -1;
         }
     }
 
@@ -256,8 +265,12 @@ public class MainActivity extends Activity {
 
         WebView current = getOrAssignPreloadWebView(currentIndex);
         for (WebView view : preloadWebViews) {
-            if (view != null) view.setVisibility(view == current ? View.VISIBLE : View.INVISIBLE);
+            if (view != null && view != current) {
+                pauseWebView(view);
+                view.setVisibility(View.INVISIBLE);
+            }
         }
+        current.setVisibility(View.VISIBLE);
         if (forceLoad || preloadIndexes[getPreloadSlot(current)] != currentIndex) {
             current.loadUrl(videos.get(currentIndex).shareUrl);
         } else {
@@ -268,14 +281,14 @@ public class MainActivity extends Activity {
 
     private WebView getCurrentPreloadWebView() {
         if (!preloadMode) return null;
-        for (int i = 0; i < preloadIndexes.length; i++) {
+        for (int i = 0; i < PRELOAD_WEBVIEW_COUNT; i++) {
             if (preloadIndexes[i] == currentIndex) return preloadWebViews[i];
         }
         return null;
     }
 
     private WebView getOrAssignPreloadWebView(int index) {
-        for (int i = 0; i < preloadIndexes.length; i++) {
+        for (int i = 0; i < PRELOAD_WEBVIEW_COUNT; i++) {
             if (preloadIndexes[i] == index) return preloadWebViews[i];
         }
         int slot = findReusablePreloadSlot();
@@ -285,24 +298,23 @@ public class MainActivity extends Activity {
     }
 
     private int findReusablePreloadSlot() {
-        for (int i = 0; i < preloadIndexes.length; i++) {
+        for (int i = 0; i < PRELOAD_WEBVIEW_COUNT; i++) {
             if (preloadIndexes[i] < 0) return i;
         }
-        for (int i = 0; i < preloadIndexes.length; i++) {
+        for (int i = 0; i < PRELOAD_WEBVIEW_COUNT; i++) {
             if (Math.abs(preloadIndexes[i] - currentIndex) > 1) return i;
         }
         return 0;
     }
 
     private int getPreloadSlot(WebView view) {
-        for (int i = 0; i < preloadWebViews.length; i++) {
+        for (int i = 0; i < PRELOAD_WEBVIEW_COUNT; i++) {
             if (preloadWebViews[i] == view) return i;
         }
         return 0;
     }
 
     private void loadAdjacentPreloads() {
-        preloadIndex(currentIndex - 1);
         preloadIndex(currentIndex + 1);
     }
 
@@ -495,7 +507,7 @@ public class MainActivity extends Activity {
             "    }\n" +
             "  }\n" +
             "  hideNoise();\n" +
-            "  setInterval(hideNoise, 700);\n" +
+            "  setInterval(hideNoise, 1200);\n" +
             "})();";
 
     private static final String DOM_DEBUG_JS =
