@@ -18,6 +18,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import org.json.JSONArray;
@@ -43,10 +44,15 @@ public class MainActivity extends Activity {
     private final List<VideoItem> videos = new ArrayList<>();
     private FrameLayout root;
     private WebView webView;
+    private final WebView[] preloadWebViews = new WebView[3];
+    private final int[] preloadIndexes = {-1, -1, -1};
+    private TextView normalTab;
+    private TextView preloadTab;
     private TextView overlay;
     private GestureDetector gestureDetector;
     private int currentIndex = 0;
     private String lastDebugUrl = "";
+    private boolean preloadMode = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,31 +88,7 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
 
-        webView = new WebView(this);
-        webView.setBackgroundColor(Color.BLACK);
-        webView.setVerticalScrollBarEnabled(false);
-        webView.setHorizontalScrollBarEnabled(false);
-        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.getSettings().setDomStorageEnabled(true);
-        webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
-        webView.getSettings().setLoadWithOverviewMode(false);
-        webView.getSettings().setUseWideViewPort(false);
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                String scheme = request.getUrl().getScheme();
-                String url = request.getUrl().toString();
-                if (!"http".equals(scheme) && !"https".equals(scheme)) return true;
-                return url.contains("/download") || url.contains("open.douyin") || url.contains("snssdk");
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String loadedUrl) {
-                injectCleaner();
-                webView.postDelayed(MainActivity.this::triggerPlay, 400);
-            }
-        });
+        webView = createWebView(false);
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
 
         overlay = new TextView(this);
@@ -115,6 +97,16 @@ public class MainActivity extends Activity {
         overlay.setGravity(Gravity.CENTER);
         overlay.setBackgroundColor(Color.TRANSPARENT);
         root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
+
+        LinearLayout tabs = new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        tabs.setBackgroundColor(0x99000000);
+        normalTab = createTab("普通播放", true);
+        preloadTab = createTab("预加载播放", false);
+        tabs.addView(normalTab, new LinearLayout.LayoutParams(0, dp(48), 1));
+        tabs.addView(preloadTab, new LinearLayout.LayoutParams(0, dp(48), 1));
+        FrameLayout.LayoutParams tabParams = new FrameLayout.LayoutParams(-1, dp(48), Gravity.BOTTOM);
+        root.addView(tabs, tabParams);
 
         gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
@@ -129,14 +121,99 @@ public class MainActivity extends Activity {
             }
         });
 
-        webView.setOnTouchListener((v, event) -> {
-            gestureDetector.onTouchEvent(event);
-            return false;
-        });
-
         setContentView(root);
         showOverlay("正在加载推荐视频...");
         loadVideos();
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private WebView createWebView(boolean forPreload) {
+        WebView view = new WebView(this);
+        view.setBackgroundColor(Color.BLACK);
+        view.setVerticalScrollBarEnabled(false);
+        view.setHorizontalScrollBarEnabled(false);
+        view.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        view.getSettings().setJavaScriptEnabled(true);
+        view.getSettings().setDomStorageEnabled(true);
+        view.getSettings().setMediaPlaybackRequiresUserGesture(false);
+        view.getSettings().setLoadWithOverviewMode(false);
+        view.getSettings().setUseWideViewPort(false);
+        view.setOnTouchListener((v, event) -> {
+            if (gestureDetector != null) gestureDetector.onTouchEvent(event);
+            return false;
+        });
+        view.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String scheme = request.getUrl().getScheme();
+                String url = request.getUrl().toString();
+                if (!"http".equals(scheme) && !"https".equals(scheme)) return true;
+                return url.contains("/download") || url.contains("open.douyin") || url.contains("snssdk");
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String loadedUrl) {
+                view.evaluateJavascript(forPreload && view != getCurrentPreloadWebView() ? "window.__kidPreload=true" : "window.__kidPreload=false", null);
+                injectCleaner(view);
+                if (forPreload && view != getCurrentPreloadWebView()) {
+                    view.postDelayed(() -> preloadVideo(view), 400);
+                } else {
+                    view.postDelayed(() -> triggerPlay(view), 400);
+                }
+            }
+        });
+        return view;
+    }
+
+    private TextView createTab(String text, boolean selected) {
+        TextView tab = new TextView(this);
+        tab.setText(text);
+        tab.setGravity(Gravity.CENTER);
+        tab.setTextSize(15);
+        tab.setTextColor(Color.WHITE);
+        tab.setBackgroundColor(selected ? 0xAA333333 : 0x66000000);
+        tab.setOnClickListener(v -> setPreloadMode(tab == preloadTab));
+        return tab;
+    }
+
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private void setPreloadMode(boolean enabled) {
+        if (preloadMode == enabled) return;
+        preloadMode = enabled;
+        normalTab.setBackgroundColor(enabled ? 0x66000000 : 0xAA333333);
+        preloadTab.setBackgroundColor(enabled ? 0xAA333333 : 0x66000000);
+        if (videos.isEmpty()) return;
+        if (enabled) {
+            ensurePreloadViews();
+            pauseWebView(webView);
+            webView.setVisibility(View.INVISIBLE);
+            showPreloadedCurrent(true);
+        } else {
+            hidePreloadViews();
+            for (WebView view : preloadWebViews) pauseWebView(view);
+            webView.setVisibility(View.VISIBLE);
+            playCurrent();
+        }
+    }
+
+    private void ensurePreloadViews() {
+        for (int i = 0; i < preloadWebViews.length; i++) {
+            if (preloadWebViews[i] == null) {
+                WebView view = createWebView(true);
+                view.setVisibility(View.INVISIBLE);
+                preloadWebViews[i] = view;
+                root.addView(view, 0, new FrameLayout.LayoutParams(-1, -1));
+            }
+        }
+    }
+
+    private void hidePreloadViews() {
+        for (WebView view : preloadWebViews) {
+            if (view != null) view.setVisibility(View.INVISIBLE);
+        }
     }
 
     private void loadVideos() {
@@ -164,31 +241,122 @@ public class MainActivity extends Activity {
         if (videos.isEmpty()) return;
         if (currentIndex < 0) currentIndex = 0;
         if (currentIndex >= videos.size()) currentIndex = videos.size() - 1;
+        if (preloadMode) {
+            showPreloadedCurrent(false);
+            return;
+        }
         VideoItem item = videos.get(currentIndex);
         overlay.setVisibility(View.GONE);
         webView.loadUrl(item.shareUrl);
     }
 
-    private void triggerPlay() {
-        if (webView == null || webView.getWidth() == 0 || webView.getHeight() == 0) return;
+    private void showPreloadedCurrent(boolean forceLoad) {
+        ensurePreloadViews();
+        overlay.setVisibility(View.GONE);
 
-        float cx = webView.getWidth() / 2f;
-        float cy = webView.getHeight() / 2f;
+        WebView current = getOrAssignPreloadWebView(currentIndex);
+        for (WebView view : preloadWebViews) {
+            if (view != null) view.setVisibility(view == current ? View.VISIBLE : View.INVISIBLE);
+        }
+        if (forceLoad || preloadIndexes[getPreloadSlot(current)] != currentIndex) {
+            current.loadUrl(videos.get(currentIndex).shareUrl);
+        } else {
+            triggerPlay(current);
+        }
+        loadAdjacentPreloads();
+    }
+
+    private WebView getCurrentPreloadWebView() {
+        if (!preloadMode) return null;
+        for (int i = 0; i < preloadIndexes.length; i++) {
+            if (preloadIndexes[i] == currentIndex) return preloadWebViews[i];
+        }
+        return null;
+    }
+
+    private WebView getOrAssignPreloadWebView(int index) {
+        for (int i = 0; i < preloadIndexes.length; i++) {
+            if (preloadIndexes[i] == index) return preloadWebViews[i];
+        }
+        int slot = findReusablePreloadSlot();
+        preloadIndexes[slot] = index;
+        preloadWebViews[slot].loadUrl(videos.get(index).shareUrl);
+        return preloadWebViews[slot];
+    }
+
+    private int findReusablePreloadSlot() {
+        for (int i = 0; i < preloadIndexes.length; i++) {
+            if (preloadIndexes[i] < 0) return i;
+        }
+        for (int i = 0; i < preloadIndexes.length; i++) {
+            if (Math.abs(preloadIndexes[i] - currentIndex) > 1) return i;
+        }
+        return 0;
+    }
+
+    private int getPreloadSlot(WebView view) {
+        for (int i = 0; i < preloadWebViews.length; i++) {
+            if (preloadWebViews[i] == view) return i;
+        }
+        return 0;
+    }
+
+    private void loadAdjacentPreloads() {
+        preloadIndex(currentIndex - 1);
+        preloadIndex(currentIndex + 1);
+    }
+
+    private void preloadIndex(int index) {
+        if (index < 0 || index >= videos.size()) return;
+        for (int existing : preloadIndexes) {
+            if (existing == index) return;
+        }
+        int slot = findReusablePreloadSlot();
+        preloadIndexes[slot] = index;
+        preloadWebViews[slot].setVisibility(View.INVISIBLE);
+        preloadWebViews[slot].loadUrl(videos.get(index).shareUrl);
+    }
+
+    private void triggerPlay() {
+        triggerPlay(webView);
+    }
+
+    private void triggerPlay(WebView target) {
+        if (target == null || target.getWidth() == 0 || target.getHeight() == 0) return;
+
+        float cx = target.getWidth() / 2f;
+        float cy = target.getHeight() / 2f;
         long now = android.os.SystemClock.uptimeMillis();
 
         MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, cx, cy, 0);
         MotionEvent up = MotionEvent.obtain(now, now + 100, MotionEvent.ACTION_UP, cx, cy, 0);
-        webView.dispatchTouchEvent(down);
-        webView.dispatchTouchEvent(up);
+        target.dispatchTouchEvent(down);
+        target.dispatchTouchEvent(up);
         down.recycle();
         up.recycle();
 
-        webView.postDelayed(() -> webView.evaluateJavascript(
+        target.postDelayed(() -> target.evaluateJavascript(
                 "(function(){" +
+                        "window.__kidPreload=false;" +
                         "var v=document.querySelector('video');" +
                         "if(v){v.muted=false;v.controls=false;var p=v.play();if(p&&p.catch){p.catch(function(){});}}" +
                         "})()",
                 null), 100);
+    }
+
+    private void preloadVideo(WebView target) {
+        target.evaluateJavascript(
+                "(function(){" +
+                        "window.__kidPreload=true;" +
+                        "var v=document.querySelector('video');" +
+                        "if(v){v.muted=true;v.controls=false;v.preload='auto';var p=v.play();if(p&&p.then){p.then(function(){setTimeout(function(){try{v.pause();}catch(e){}},150);}).catch(function(){});}}" +
+                        "})()",
+                null);
+    }
+
+    private void pauseWebView(WebView target) {
+        if (target == null) return;
+        target.evaluateJavascript("(function(){var v=document.querySelector('video');if(v){v.muted=true;try{v.pause();}catch(e){}}})()", null);
     }
 
     private void playNext() {
@@ -210,13 +378,17 @@ public class MainActivity extends Activity {
     }
 
     private void injectCleaner() {
-        webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null);
-        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 80);
-        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 250);
-        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 500);
-        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 900);
-        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 1500);
-        webView.postDelayed(() -> webView.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 2500);
+        injectCleaner(webView);
+    }
+
+    private void injectCleaner(WebView target) {
+        target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null);
+        target.postDelayed(() -> target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 80);
+        target.postDelayed(() -> target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 250);
+        target.postDelayed(() -> target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 500);
+        target.postDelayed(() -> target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 900);
+        target.postDelayed(() -> target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 1500);
+        target.postDelayed(() -> target.evaluateJavascript(HIDE_DISTRACTIONS_JS, null), 2500);
         webView.postDelayed(this::captureDomDebug, 2500);
     }
 
@@ -317,9 +489,9 @@ public class MainActivity extends Activity {
             "    document.querySelectorAll('.container,.video-container,.horizontal-video').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
             "    const video=document.querySelector('video');\n" +
             "    if(video){\n" +
-            "      video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
+            "      video.muted=!!window.__kidPreload; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true;\n" +
             "      video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important';\n" +
-            "      video.preload='auto'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); }\n" +
+            "      video.preload='auto'; if(!window.__kidPreload){ const p=video.play(); if(p&&p.catch){ p.catch(function(){}); } }\n" +
             "    }\n" +
             "  }\n" +
             "  hideNoise();\n" +
