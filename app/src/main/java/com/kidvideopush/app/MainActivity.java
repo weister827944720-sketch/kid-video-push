@@ -6,6 +6,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.GestureDetector;
@@ -43,6 +44,8 @@ public class MainActivity extends Activity {
     private static final int TAB_DOUYIN = 1;
     private static final int TAB_BILIBILI = 2;
     private static final int TAB_MINE = 3;
+    private static final String PREFS_NAME = "kid_video_push";
+    private static final String PREF_LAST_CLIPBOARD_URL = "lastPushedClipboardUrl";
 
     private final List<VideoItem> allVideos = new ArrayList<>();
     private final List<VideoItem> videos = new ArrayList<>();
@@ -65,13 +68,14 @@ public class MainActivity extends Activity {
 
         if (Intent.ACTION_SEND.equals(getIntent().getAction())) {
             String text = getIntent().getStringExtra(Intent.EXTRA_TEXT);
-            showPushMode(text == null ? "" : text);
+            showPushMode(text == null ? "" : text, false);
             return;
         }
 
         String clipboardText = readClipboardText();
-        if (extractSupportedUrl(clipboardText) != null) {
-            showPushMode(clipboardText);
+        String clipboardUrl = extractSupportedUrl(clipboardText);
+        if (clipboardUrl != null && !clipboardUrl.equals(getLastPushedClipboardUrl())) {
+            showPushMode(clipboardText, true);
         } else {
             showPlayerMode();
         }
@@ -84,6 +88,15 @@ public class MainActivity extends Activity {
         if (clip == null || clip.getItemCount() == 0) return "";
         CharSequence text = clip.getItemAt(0).coerceToText(this);
         return text == null ? "" : text.toString();
+    }
+
+    private String getLastPushedClipboardUrl() {
+        return getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_LAST_CLIPBOARD_URL, "");
+    }
+
+    private void saveLastPushedClipboardUrl(String url) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        prefs.edit().putString(PREF_LAST_CLIPBOARD_URL, url).apply();
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -209,9 +222,10 @@ public class MainActivity extends Activity {
 
     private void loadMinePage() {
         String html = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
-                "<style>body{margin:0;background:#090909;color:#fff;font-family:sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}.box{width:86%;max-width:520px}.title{font-size:28px;font-weight:700;margin-bottom:12px}.sub{opacity:.72;margin-bottom:28px;line-height:1.6}.btn{display:block;text-decoration:none;color:#fff;background:#222;border:1px solid #444;border-radius:14px;padding:18px 20px;margin:14px 0;font-size:18px}.bili{background:#102233;border-color:#00a1d6}</style>" +
+                "<style>body{margin:0;background:#090909;color:#fff;font-family:sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}.box{width:86%;max-width:520px}.title{font-size:28px;font-weight:700;margin-bottom:12px}.sub{opacity:.72;margin-bottom:28px;line-height:1.6}.btn{display:block;text-decoration:none;color:#fff;background:#222;border:1px solid #444;border-radius:14px;padding:18px 20px;margin:14px 0;font-size:18px}.bili{background:#102233;border-color:#00a1d6}.admin{background:#2a1d12;border-color:#d58b31}</style>" +
                 "</head><body><div class='box'><div class='title'>我的账号</div><div class='sub'>登录后 WebView 会保存 Cookie。B 站登录后播放清晰度会更稳定。</div>" +
                 "<a class='btn bili' href='https://passport.bilibili.com/login'>哔哩哔哩登录 / 扫码</a>" +
+                "<a class='btn admin' href='" + SERVER_URL + "/admin'>管理/删除视频连接</a>" +
                 "</div></body></html>";
         webView.loadDataWithBaseURL("https://local.mine/", html, "text/html", "UTF-8", null);
     }
@@ -361,14 +375,14 @@ public class MainActivity extends Activity {
         overlay.postDelayed(() -> overlay.setVisibility(View.GONE), 800);
     }
 
-    private void showPushMode(String sharedText) {
+    private void showPushMode(String sharedText, boolean fromClipboard) {
         FrameLayout frame = new FrameLayout(this);
         frame.setBackgroundColor(Color.BLACK);
         TextView text = new TextView(this);
         text.setTextColor(Color.WHITE);
         text.setTextSize(18);
         text.setGravity(Gravity.CENTER);
-        text.setText("检测到视频链接\n正在推送给平板...");
+        text.setText("检测到视频链接\n正在推送...");
         frame.addView(text, new FrameLayout.LayoutParams(-1, -1));
         setContentView(frame);
 
@@ -378,7 +392,8 @@ public class MainActivity extends Activity {
                 String link = extractSupportedUrl(sharedText);
                 if (link == null) throw new Exception("没有找到支持的视频链接");
                 pushLink(SERVER_URL, link);
-                result = "已推送到平板\n" + link;
+                if (fromClipboard) saveLastPushedClipboardUrl(link);
+                result = "推送成功\n" + link;
             } catch (Exception e) {
                 result = "推送失败\n" + e.getMessage();
             }
@@ -386,8 +401,8 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 text.setText(finalResult);
                 text.postDelayed(() -> {
-                    if (finalResult.startsWith("已推送")) finish();
-                }, 1800);
+                    if (finalResult.startsWith("推送成功")) finish();
+                }, 1500);
             });
         }).start();
     }
