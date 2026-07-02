@@ -13,7 +13,6 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
-import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -63,8 +62,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        hideSystemBars();
 
         if (Intent.ACTION_SEND.equals(getIntent().getAction())) {
             String text = getIntent().getStringExtra(Intent.EXTRA_TEXT);
@@ -78,22 +75,6 @@ public class MainActivity extends Activity {
         } else {
             showPlayerMode();
         }
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) hideSystemBars();
-    }
-
-    private void hideSystemBars() {
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
     }
 
     private String readClipboardText() {
@@ -460,16 +441,17 @@ public class MainActivity extends Activity {
             "    const css = `\n" +
             "      html, body, #app, .m-video, .m-video-normal, .video-share, .m-video-player, .player-container, #bilibiliPlayer, .gsl-wrap, .gsl-area { margin:0!important; padding:0!important; overflow:hidden!important; background:#000!important; display:block!important; visibility:visible!important; opacity:1!important; }\n" +
             "      #bilibiliPlayer, .m-video-player, .player-container, .gsl-wrap, .gsl-area { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; z-index:1!important; }\n" +
-            "      video, .gsl-video { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:2!important; background:#000!important; }\n" +
-            "      .m-navbar, .right, .open-app-img, m-open-app, .gsl-buffer, .gsl-buffer-app, .gsl-poster, .gsl-poster-tips, .gsl-control, .gsl-sendbar, .openapp-btn, .video-natural-search, .fixed-wrapper, .m-video-related, .list-view-wrap-v2, .openapp-dialog, .openapp-mask, .m-related-openapp, .gsl-callapp-dom, .bili-dialog-m, .launch-app-btn { display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; width:0!important; height:0!important; }\n" +
+            "      video, .gsl-video { display:block!important; visibility:visible!important; opacity:1!important; width:100vw!important; height:100vh!important; object-fit:contain!important; position:fixed!important; inset:0!important; z-index:1!important; background:#000!important; }\n" +
+            "      [class*=\"dm\"], [class*=\"danmaku\"] { visibility:visible!important; opacity:1!important; z-index:4!important; pointer-events:none!important; }\n" +
+            "      .gsl-play-mask, .gsl-play-mask-icon, .icon-preview, .m-navbar, .right, .open-app-img, m-open-app, .gsl-buffer, .gsl-buffer-app, .gsl-poster, .gsl-poster-tips, .openapp-btn, .video-natural-search, .fixed-wrapper, .m-video-related, .list-view-wrap-v2, .openapp-dialog, .openapp-mask, .m-related-openapp, .gsl-callapp-dom, .bili-dialog-m, .launch-app-btn { display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; width:0!important; height:0!important; }\n" +
             "    `;\n" +
             "    let style=document.getElementById('kid-bili-clean-style');\n" +
             "    if(!style){ style=document.createElement('style'); style.id='kid-bili-clean-style'; document.head.appendChild(style); }\n" +
             "    style.textContent=css;\n" +
             "    document.querySelectorAll('#app,.m-video,.m-video-normal,.video-share,.m-video-player,.player-container,#bilibiliPlayer,.gsl-wrap,.gsl-area').forEach(function(el){ el.style.setProperty('display','block','important'); el.style.setProperty('visibility','visible','important'); el.style.setProperty('opacity','1','important'); });\n" +
-            "    document.querySelectorAll('.m-navbar,.right,.open-app-img,m-open-app,.gsl-buffer,.gsl-buffer-app,.gsl-poster,.gsl-poster-tips,.gsl-control,.gsl-sendbar,.openapp-btn,.video-natural-search,.fixed-wrapper,.m-video-related,.list-view-wrap-v2,.openapp-dialog,.openapp-mask,.m-related-openapp,.gsl-callapp-dom').forEach(function(el){ el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('pointer-events','none','important'); });\n" +
+            "    document.querySelectorAll('.gsl-play-mask,.gsl-play-mask-icon,.icon-preview,.m-navbar,.right,.open-app-img,m-open-app,.gsl-buffer,.gsl-buffer-app,.gsl-poster,.gsl-poster-tips,.openapp-btn,.video-natural-search,.fixed-wrapper,.m-video-related,.list-view-wrap-v2,.openapp-dialog,.openapp-mask,.m-related-openapp,.gsl-callapp-dom').forEach(function(el){ el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('pointer-events','none','important'); });\n" +
             "    const video=document.querySelector('video');\n" +
-            "    if(video){ video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true; video.preload='auto'; video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:2!important;background:#000!important'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); } }\n" +
+            "    if(video){ video.muted=false; video.controls=false; video.loop=true; video.autoplay=true; video.playsInline=true; video.preload='auto'; video.style.cssText='width:100vw!important;height:100vh!important;object-fit:contain!important;position:fixed!important;inset:0!important;z-index:1!important;background:#000!important'; const p=video.play(); if(p&&p.catch){ p.catch(function(){}); } }\n" +
             "  }\n" +
             "  cleanBili();\n" +
             "  setInterval(cleanBili, 1200);\n" +
