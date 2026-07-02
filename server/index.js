@@ -269,7 +269,7 @@ function renderAdmin(videos, message) {
       <div class="title">${escapeHtml(item.title || '视频分享链接')}</div>
       <div class="meta">${escapeHtml(item.source || 'unknown')} · ${escapeHtml(item.createdAt || '')}</div>
       <div class="url">${escapeHtml(item.shareUrl || '')}</div>
-      <form method="post" action="/admin/delete" onsubmit="return confirm('确定删除这个视频连接？');">
+      <form method="post" action="/admin/delete">
         <input type="hidden" name="id" value="${escapeHtml(item.id || '')}" />
         <button class="delete" type="submit">删除此链接</button>
       </form>
