@@ -31,7 +31,7 @@ class Handler(BaseHTTPRequestHandler):
 
         body = self.read_json_body()
         share_url = str(body.get("shareUrl", "")).strip()
-        title = str(body.get("title", "抖音分享链接")).strip()
+        title = str(body.get("title", "视频分享链接")).strip()
 
         if not re.match(r"^https?://", share_url, re.I):
             self.send_json(400, {"error": "shareUrl must be an http(s) url"})
@@ -46,7 +46,7 @@ class Handler(BaseHTTPRequestHandler):
         now = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
         item = {
             "id": re.sub(r"\D", "", now),
-            "source": "douyin",
+            "source": detect_source(share_url),
             "title": title,
             "shareUrl": share_url,
             "status": "link-only",
@@ -99,6 +99,15 @@ def read_videos():
 
 def write_videos(videos):
     DATA_FILE.write_text(json.dumps(videos, ensure_ascii=False, indent=2) + "\n", "utf-8")
+
+
+def detect_source(url):
+    value = str(url or "").lower()
+    if "douyin.com" in value:
+        return "douyin"
+    if "bilibili.com" in value or "b23.tv" in value:
+        return "bilibili"
+    return "unknown"
 
 
 if __name__ == "__main__":

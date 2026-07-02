@@ -43,7 +43,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && requestUrl.pathname === '/api/videos') {
       const body = await readJsonBody(req);
       const rawText = String(body?.text || body?.shareText || body?.shareUrl || '').trim();
-      const item = await addVideoFromText(rawText, String(body?.title || '抖音分享链接').trim());
+      const item = await addVideoFromText(rawText, String(body?.title || '视频分享链接').trim());
       sendJson(res, 201, item);
       return;
     }
@@ -92,9 +92,9 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`Kid video push server listening on http://0.0.0.0:${port}`);
 });
 
-async function addVideoFromText(rawText, title = '抖音分享链接') {
-  const shareUrl = extractDouyinUrl(rawText);
-  if (!shareUrl) throw new Error('没有找到抖音链接');
+async function addVideoFromText(rawText, title = '视频分享链接') {
+  const shareUrl = extractSupportedUrl(rawText);
+  if (!shareUrl) throw new Error('没有找到抖音或哔哩哔哩链接');
 
   const videos = await readVideos();
   const existing = videos.find((item) => item.shareUrl === shareUrl);
@@ -102,7 +102,7 @@ async function addVideoFromText(rawText, title = '抖音分享链接') {
 
   const item = {
     id: new Date().toISOString().replace(/[-:.TZ]/g, ''),
-    source: 'douyin',
+    source: detectSource(shareUrl),
     title,
     shareUrl,
     status: 'link-only',
@@ -127,11 +127,31 @@ function extractDouyinUrl(text) {
   return anyDouyin ? anyDouyin[0].replace(/[，,。\s]+$/g, '') : null;
 }
 
+function extractBilibiliUrl(text) {
+  const source = String(text || '');
+  const videoMatch = source.match(/https?:\/\/(?:www\.|m\.)?bilibili\.com\/[^\s，,。]*/i);
+  if (videoMatch) return videoMatch[0].replace(/[，,。\s]+$/g, '');
+
+  const shortMatch = source.match(/https?:\/\/b23\.tv\/[^\s，,。]*/i);
+  return shortMatch ? shortMatch[0].replace(/[，,。\s]+$/g, '') : null;
+}
+
+function extractSupportedUrl(text) {
+  return extractDouyinUrl(text) || extractBilibiliUrl(text);
+}
+
+function detectSource(url) {
+  const source = String(url || '').toLowerCase();
+  if (source.includes('douyin.com')) return 'douyin';
+  if (source.includes('bilibili.com') || source.includes('b23.tv')) return 'bilibili';
+  return 'unknown';
+}
+
 function renderHome(videos, message) {
   const rows = videos.map((item) => `
     <li>
       <div class="url">${escapeHtml(item.shareUrl)}</div>
-      <div class="meta">${escapeHtml(item.createdAt || '')}</div>
+      <div class="meta">${escapeHtml(item.source || 'unknown')} · ${escapeHtml(item.createdAt || '')}</div>
     </li>
   `).join('');
 
@@ -140,7 +160,7 @@ function renderHome(videos, message) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>孩子视频推送后台</title>
+  <title>聚合视频推送后台</title>
   <style>
     body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #111; color: #f5f5f5; }
     main { max-width: 760px; margin: 0 auto; padding: 24px; }
@@ -157,10 +177,10 @@ function renderHome(videos, message) {
 </head>
 <body>
   <main>
-    <h1>孩子视频推送后台</h1>
+    <h1>聚合视频推送后台</h1>
     <p><a href="/debug/dom">查看 WebView DOM 调试数据</a></p>
     <form method="post" action="/push">
-      <textarea name="text" placeholder="粘贴抖音复制出来的整段文字，例如：0.79 复制打开抖音... https://v.douyin.com/xxxx/ ..."></textarea>
+      <textarea name="text" placeholder="粘贴抖音或哔哩哔哩分享文字，例如：https://v.douyin.com/xxxx/ 或 https://www.bilibili.com/video/BV... 或 https://b23.tv/xxxx"></textarea>
       <button type="submit">推送到平板</button>
     </form>
     ${message ? `<div class="message">${escapeHtml(message)}</div>` : ''}
